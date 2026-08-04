@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: monitoredapp-deployment
+  namespace: monitoring
+  labels:
+    app: monitoredapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: monitoredapp
+  template:
+    metadata:
+      labels:
+        app: monitoredapp
+    spec:
+      containers:
+        - name: monitoredapp
+          image: phenixita/monitoredapplication
+          ports:
+            - containerPort: 80
+          env:
+            - name: ASPNETCORE_URLS
+              value: "http://+:80"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 20
+            periodSeconds: 15
+---
+# Service dell'app (ClusterIP -> accesso via kubectl port-forward)
+apiVersion: v1
+kind: Service
+metadata:
+  name: monitoredapplication
+  namespace: monitoring
+spec:
+  type: ClusterIP
+  selector:
+    app: monitoredapp
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80          # porta del Service (usata anche da Prometheus per lo scrape)
+      targetPort: 80    # porta del container
