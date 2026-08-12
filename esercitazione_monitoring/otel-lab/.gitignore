@@ -1,0 +1,6 @@
+# Stato locale Vagrant / VirtualBox
+.vagrant/
+*.log
+
+# File di sistema
+.DS_Store
