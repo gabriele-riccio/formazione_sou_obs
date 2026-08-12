@@ -1,0 +1,28 @@
+Vagrant.configure("2") do |config|
+  config.vm.box = "bento/ubuntu-24.04"
+  config.vm.hostname = "zabbix-lab"
+
+  # Rete privata host-only anche se non so se funziona
+  config.vm.network "private_network", ip: "192.168.56.13"
+
+  # Nat sempre funzionante via 127.0.0.1 sul Mac
+  config.vm.network "forwarded_port", guest: 8080, host: 8080, host_ip: "127.0.0.1"
+  config.vm.network "forwarded_port", guest: 3000, host: 3000, host_ip: "127.0.0.1"
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.name = "zabbix-lab"
+    vb.memory = "4096"
+    vb.cpus = 2
+  end
+
+  config.vm.provision "shell", inline: <<-SHELL
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y podman python3-pip
+    pip3 install --break-system-packages podman-compose
+    loginctl enable-linger vagrant
+    podman --version
+    podman-compose --version
+    SHELL
+end
+
