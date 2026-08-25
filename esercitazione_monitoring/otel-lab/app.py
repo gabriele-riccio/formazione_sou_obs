@@ -2,12 +2,7 @@ import os
 from flask import Flask
 
 from opentelemetry.sdk.resources import Resource
-from opentelemetry import trace, metrics
-
-# Tracce
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry import metrics
 
 # Metriche
 from opentelemetry.sdk.metrics import MeterProvider
@@ -22,13 +17,6 @@ OTLP_ENDPOINT = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:
 
 # Resource: "chi" emette la telemetria comune a metriche e tracce
 resource = Resource.create({"service.name": "otel-lab-app"})
-
-# Pipeline TRACCE: Provider -> Processor(batch) -> Exporter(OTLP)
-tracer_provider = TracerProvider(resource=resource)
-tracer_provider.add_span_processor(
-    BatchSpanProcessor(OTLPSpanExporter(endpoint=OTLP_ENDPOINT, insecure=True))
-)
-trace.set_tracer_provider(tracer_provider)
 
 # Pipeline METRICHE: Provider -> Reader(periodico) -> Exporter(OTLP)
 metric_reader = PeriodicExportingMetricReader(
@@ -48,7 +36,7 @@ request_counter = meter.create_counter(
 
 # --- App Flask ---
 app = Flask(__name__)
-FlaskInstrumentor().instrument_app(app)   # span automatici per ogni richiesta
+FlaskInstrumentor().instrument_app(app)   # metriche HTTP automatiche per ogni richiesta
 
 @app.route("/")
 def home():
