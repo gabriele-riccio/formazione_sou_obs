@@ -14,7 +14,7 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
 
-#  Auto-instrumentation Flask 
+# Auto-instrumentation Flask
 from opentelemetry.instrumentation.flask import FlaskInstrumentor
 
 # Endpoint del Collector (sovrascrivibile da variabile d'ambiente)
