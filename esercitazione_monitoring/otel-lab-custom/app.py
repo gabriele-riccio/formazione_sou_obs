@@ -1,0 +1,51 @@
+import os
+import random
+from flask import Flask
+
+from opentelemetry.sdk.resources import Resource
+from opentelemetry import metrics
+
+# Metriche
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+
+# Auto-instrumentation Flask
+from opentelemetry.instrumentation.flask import FlaskInstrumentor
+
+# Endpoint del Collector (sovrascrivibile da variabile d'ambiente)
+OTLP_ENDPOINT = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4317")
+
+# Resource: "chi" emette la telemetria comune a metriche e tracce
+resource = Resource.create({"service.name": "otel-lab-app"})
+
+# Pipeline METRICHE: Provider -> Reader(periodico) -> Exporter(OTLP)
+metric_reader = PeriodicExportingMetricReader(
+    OTLPMetricExporter(endpoint=OTLP_ENDPOINT, insecure=True),
+    export_interval_millis=5000,   # spedisce le metriche ogni 5s
+)
+meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
+metrics.set_meter_provider(meter_provider)
+
+# Metrica custom (instrumentation manuale)
+meter = metrics.get_meter("otel-lab-app")
+request_counter = meter.create_counter(
+    "app_requests_total",
+    unit="1",
+    description="Numero totale di richieste ricevute",
+)
+
+NOMI = ["Pippo", "Pluto", "Paperino"]
+# --- App Flask ---
+app = Flask(__name__)
+#FlaskInstrumentor().instrument_app(app)   # metriche HTTP automatiche per ogni richiesta
+
+@app.route("/")
+def home():
+    nome = random.choice(NOMI)
+    print(nome)
+    request_counter.add(1, {"name": nome})
+    return f"Ciao {nome}!\n"
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
