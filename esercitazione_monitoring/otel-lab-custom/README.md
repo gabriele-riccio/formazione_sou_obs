@@ -42,10 +42,10 @@ Tutto il lab gira dentro una VM Ubuntu gestita da Vagrant, provisionata in modo 
   app.py`).
 - **requirements.txt**: Elenco librerie che l'app usa (Flask e i pacchetti di OTel come l'SDK e l'exporter OTLP), durante la build il Dockerfile le installa.
 - **app.py** — Applicazione Flask instrumentata con OpenTelemetry SDK, fa tre cose principali:
-    1. Configura la pipeline delle metriche OpenTelemetry, crea un `MeterProvider` con un `PeriodicExportingMetricReader` che, ogni 5 secondi, spedisce le metriche al Collector via OTLP
+    - Configura la pipeline delle metriche OpenTelemetry, crea un `MeterProvider` con un `PeriodicExportingMetricReader` che, ogni 5 secondi, spedisce le metriche al Collector via OTLP
        (protocollo `gRPC`, porta `4317`).
-    2. Definisce la `metrica custom`: Un counter app_requests_total, creato a mano con `meter.create_counter(...)`.
-    3. Espone l'endpoint `/` definendo una funzione `home()` che ad ogni richiesta sceglie un nome a caso tra Pippo, Paperino, Pluto e incrementa il counter passando {"name": nome}.
+    - Definisce la `metrica custom`: Un counter app_requests_total, creato a mano con `meter.create_counter(...)`.
+    - Espone l'endpoint `/` definendo una funzione `home()` che ad ogni richiesta sceglie un nome a caso tra Pippo, Paperino, Pluto e incrementa il counter passando {"name": nome}.
        > Il valore della metrica è sempre un numero (il conteggio),il nome vive nella label e  mai nel valore.
 - **podman-compose.yml**: Il file che orchestra i 4 container e li fa parlare tra loro, definendo un servizio per ciascuno.
   - `app-python` - costruito nel Dockerfile, espone la porta 5000
@@ -93,11 +93,13 @@ app_requests_total{...,name="Pluto",...}    43
 ## 3. Controllare Prometheus e costruire il pannello su Grafana
 Da computer http://localhost:9090, si aprirà la URI di Prometheus scrivendo la query app_request_total nella scheda Table compaiono le tre serie con i loro valori:
 
+![seconda_parte](metriche_custom/Screenshot%202026-08-27%20alle%2010.37.27.png)
 
-Per grafana invece una volta aperta sul browser http://localhost:3000 e fatto l'accesso bisogna costruire il pannello per la visualizzazione delle metriche.
+Per Grafana invece una volta aperta sul browser http://localhost:3000 e fatto l'accesso bisogna costruire il pannello per la visualizzazione delle metriche.
 Prima si crea una nuova dashboard con `Create dashboard` e poi `Add visualization`, scegliendo Prometheus come data source.
 
 Si aprirà una schermata dove nella zona query, passato dalla modalità `Builder` a `Code, incollo `sum by (name) (rate(app_requests_total[1m]))`(per vedere le richieste al secondo separate per endpoint), poi premo `Run queries`. 
 A questo punto si vedranno tre linee, una per Pippo, una per Paperino e una per Pluto.
+![seconda_parte](metriche_custom/Screenshot%202026-08-27%20alle%2010.37.27.png)
 
 
