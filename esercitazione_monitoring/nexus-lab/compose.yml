@@ -1,0 +1,28 @@
+version: "3"
+
+services:
+  nexus:
+    image: docker.io/sonatype/nexus3:latest
+    ports:
+      - "8081:8081"
+    environment:
+      - INSTALL4J_ADD_VM_PARAMS=-Xms1g -Xmx2g -XX:MaxDirectMemorySize=2g
+    volumes:
+      - nexus-data:/nexus-data
+
+  prometheus:
+    image: docker.io/prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  grafana:
+    image: docker.io/grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+
+volumes:
+  nexus-data:

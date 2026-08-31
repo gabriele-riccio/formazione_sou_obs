@@ -1,0 +1,30 @@
+Vagrant.configure("2") do |config|
+  config.vm.box = "bento/ubuntu-24.04"
+  config.vm.hostname = "nexus-lab"
+
+  config.vm.network "private_network", ip: "192.168.56.15"
+
+  # Forward NAT verso 127.0.0.1 sul Mac
+  config.vm.network "forwarded_port", guest: 8081, host: 8081, host_ip: "127.0.0.1"  # NEXUS UI/API
+  config.vm.network "forwarded_port", guest: 9090, host: 9090, host_ip: "127.0.0.1"  # Prometheus
+  config.vm.network "forwarded_port", guest: 3000, host: 3000, host_ip: "127.0.0.1"  # Grafana
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.name = "nexus-lab"
+    vb.memory = 4096
+    vb.cpus = 2
+  end
+
+  config.vm.provision "shell", inline: <<-SHELL
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y podman pipx
+    # podman-compose isolato con pipx, esposto in /usr/local/bin (PEP 668-safe)
+    PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install podman-compose
+    echo "=== VERSIONI INSTALLATE ==="
+    haproxy -v | head -1
+    podman --version
+    podman info --format '{{.Host.NetworkBackend}}'   # deve dire: netavark
+    /usr/local/bin/podman-compose --version
+  SHELL
+end
