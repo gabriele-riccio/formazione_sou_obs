@@ -1,0 +1,39 @@
+version: "3"
+
+services:
+  haproxy:
+    image: docker.io/library/haproxy:2.8
+    ports:
+      - "8080:8080"
+      - "8404:8404"
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    depends_on:
+      - web1
+      - web2
+
+  web1:
+    image: docker.io/library/nginx:alpine
+    volumes:
+      - ./web1/index.html:/usr/share/nginx/html/index.html:ro
+      - ./nginx-nosendfile.conf:/etc/nginx/conf.d/default.conf:ro
+
+  web2:
+    image: docker.io/library/nginx:alpine
+    volumes:
+      - ./web2/index.html:/usr/share/nginx/html/index.html:ro
+      - ./nginx-nosendfile.conf:/etc/nginx/conf.d/default.conf:ro
+
+  prometheus:
+    image: docker.io/prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  grafana:
+    image: docker.io/grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
