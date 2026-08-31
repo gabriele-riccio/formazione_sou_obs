@@ -100,6 +100,6 @@ Prima si crea una nuova dashboard con `Create dashboard` e poi `Add visualizatio
 
 Si aprirà una schermata dove nella zona query, passato dalla modalità `Builder` a `Code, incollo `sum by (name) (rate(app_requests_total[1m]))`(per vedere le richieste al secondo separate per endpoint), poi premo `Run queries`. 
 A questo punto si vedranno tre linee, una per Pippo, una per Paperino e una per Pluto.
-![seconda_parte](metriche_custom/Screenshot%202026-08-27%20alle%2010.37.27.png)
+![seconda_parte](metriche_custom/Screenshot%202026-08-25%20alle%2017.15.06.png)
 
 
