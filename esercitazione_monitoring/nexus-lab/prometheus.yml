@@ -6,6 +6,6 @@ scrape_configs:
     metrics_path: /service/rest/metrics/prometheus
     basic_auth:
       username: metrics
-      password: __NEXUS_METRICS_PASSWORD__
+      password: metrics123
     static_configs:
       - targets: ['nexus:8081']
