@@ -81,7 +81,7 @@ Ho poi scritto il file di configurazione di haproxy, dove ho definito due fronte
 - web_inper il traffico(:8080) verso il backend web_pool.
 - Un altro per stats e metriche (:8404) che attiva l'exporter Prometheus.
 
-Ho scritto poi il podman-compose per costruire i container che mi serviranno, definendo per ognuno l'immagine da Docker Hub, volume e porte descritte anche sopra.:
+Ho scritto poi il podman-compose per costruire i container che mi serviranno, definendo per ognuno l'immagine da Docker Hub, il volume e porte: 
 - **HAProxy**
 - **web1**
 - **web2**
