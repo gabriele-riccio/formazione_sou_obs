@@ -122,9 +122,11 @@ Dove ho inserito una password e username in modo che prometheus effettuasse lo s
 
 ## Dashboard Grafana importata con 8 pannelli su metriche reali.
 
-![seconda_parte](haproxy/Screenshot%202026-09-01%20alle%2012.36.37.png)
+Importo una Dashboard che mi fa visionare 8 pannelli su metriche reali in Grafana(descritti sotto):
+> Nota: Bisogna prima andare a scegliere il datasource Prometheus, dato che non l'ho impostato di default ma si può impostare facilmente.
+![seconda_parte](nexus/Screenshot%202026-09-01%20alle%2015.44.15.png)
 
-Metriche chiave (famiglia JVM + applicative):
+**Metriche chiave** (famiglia JVM + applicative):
 
 | Pannello | Metrica |
 |----------|---------|
