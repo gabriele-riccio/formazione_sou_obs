@@ -118,7 +118,7 @@ Prometheus raccoglie le metriche (target haproxy UP) e in Grafana una volta aggi
 > **Nota versione:** HAProxy 2.8 espone la salute come gauge `haproxy_server_status` con
 > label `state` (UP/DOWN/MAINT/DRAIN/NOLB), **non** come `haproxy_server_up` (versioni più recenti).
 
-qui devo inserire l'immagine di Grafana
+![seconda_parte](metriche_custom/Screenshot%202026-08-27%20alle%2010.37.27.png)
 
 **Passo 5 - Dimostrazione Alta Disponibilità**
 
