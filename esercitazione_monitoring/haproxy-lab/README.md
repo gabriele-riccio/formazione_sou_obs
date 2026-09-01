@@ -91,7 +91,7 @@ Ho scritto poi il podman-compose per costruire i container che mi serviranno:
 - **Grafana**
 Definendo per ognuno l'immagine da Docker Hub, volume e porte descritte anche sopra.
 
-Infine ho scritto due pagine di prova html per i due backend che devo gestire con HAProxy web1 e web2, che mostrano solo una riga di testo(che poi il load balancer di HAProxy gestirà per mandare traffico randomicamente su una e sull'altra).
+Infine ho scritto due pagine di prova html per i due backend che devo gestire con HAProxy `web1` e `web2`, che mostrano solo una riga di testo(che poi il load balancer di HAProxy gestirà per mandare traffico randomicamente su una e sull'altra).
 
 **Passo 3 - Avvio dei container da dentro la VM e verifica del bilanciamento**
 ```bash
@@ -118,7 +118,7 @@ Prometheus raccoglie le metriche (target haproxy UP) e in Grafana una volta aggi
 > **Nota versione:** HAProxy 2.8 espone la salute come gauge `haproxy_server_status` con
 > label `state` (UP/DOWN/MAINT/DRAIN/NOLB), **non** come `haproxy_server_up` (versioni più recenti).
 
-![seconda_parte](metriche_custom/Screenshot%202026-08-27%20alle%2010.37.27.png)
+![seconda_parte](haproxy/Screenshot%202026-09-01%20alle%2012.36.37.png)
 
 **Passo 5 - Dimostrazione Alta Disponibilità**
 
@@ -129,7 +129,7 @@ podman start vagrant_web2_1   # recovery → health check falliscono → web2 ri
 ```
 
 **Passo 6 - Esportazione sul Mac della Dashboard in formato json**
-Infine ho esportato da Grafana la dashboard in formato json, in modo da poterla riutilizzare e per vedere oltre all'importazione delle dashboard (come ho fatto con Nexus) anche come fare l'esportazione e l'ho salvato in una cartella grafana/ che è presente come gli altri file in questa repo.
+Infine ho esportato da Grafana la dashboard in formato json, in modo da poterla riutilizzare e per vedere oltre all'importazione delle dashboard (come ho fatto con Nexus) anche come fare l'esportazione e l'ho salvato in una cartella `grafana/` che è presente come gli altri file in questa repo.
 
 ```bash
 {
