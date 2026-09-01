@@ -1,0 +1,14 @@
+#Modalità dichiarativa, senza database, config dichiarativa
+env:
+  database: "off"
+
+# Abilito lo status api su :8100, dove si trova /metrics per prometheus
+# disabilitando l'admin API pubblico per sicurezza
+
+admin:
+  enabled: false
+
+# proxy di kong, dove passa il traffico verso i service
+proxy:
+  type: NodePort
+
