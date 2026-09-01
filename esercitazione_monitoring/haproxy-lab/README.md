@@ -59,9 +59,7 @@ Senza osservabilità, un load balancer sano e uno in sofferenza si assomigliano 
 | `web1/index.html`, `web2/index.html` | pagine di test dei backend |
 | `grafana/haproxy-dashboard.json` | dashboard esportata (4 pannelli) |
 
-## Svolgimento
-
-**Passo 1 - VM e provisioning**
+## Passo 1 - VM e provisioning
 Ho scritto il Vagrantfile con file box bento/ubuntu-24.04 e realizzato il port forwarding verso il Mac (porte: 8080, 8404, 9090, 3000) 
 e il provisioning che installa podman e podman-compose.
 
@@ -78,7 +76,7 @@ Accessi dal browser del Mac:
 - Prometheus → http://localhost:9090
 - Grafana → http://localhost:3000 (admin/admin)
 
-**Passo 2 - compose.yml, haproxy.cfg (web1 e web2)/index.html**
+## Passo 2 - compose.yml, haproxy.cfg (web1 e web2)/index.html
 Ho poi scritto il file di configurazione di haproxy, dove ho definito due frontend:
 - web_inper il traffico(:8080) verso il backend web_pool.
 - Un altro per stats e metriche (:8404) che attiva l'exporter Prometheus.
@@ -93,7 +91,7 @@ Definendo per ognuno l'immagine da Docker Hub, volume e porte descritte anche so
 
 Infine ho scritto due pagine di prova html per i due backend che devo gestire con HAProxy `web1` e `web2`, che mostrano solo una riga di testo(che poi il load balancer di HAProxy gestirà per mandare traffico randomicamente su una e sull'altra).
 
-**Passo 3 - Avvio dei container da dentro la VM e verifica del bilanciamento**
+## Passo 3 - Avvio dei container da dentro la VM e verifica del bilanciamento
 ```bash
 vagrant ssh
 cd /vagrant
@@ -106,7 +104,7 @@ for i in 1 2 3 4 5 6; do curl -s localhost:8080; done
  # -> Sono web1 / Sono web2 / Sono web1 / ...  (roundrobin)
 ```
 
-**Passo4 - Scrape e dashboard**
+## Passo4 - Scrape e dashboard
 Prometheus raccoglie le metriche (target haproxy UP) e in Grafana una volta aggiunto il datasource costruisco i pannelli con query PromQL:
 | Pannello | Query |
 |----------|-------|
@@ -120,7 +118,7 @@ Prometheus raccoglie le metriche (target haproxy UP) e in Grafana una volta aggi
 
 ![seconda_parte](haproxy/Screenshot%202026-09-01%20alle%2012.36.37.png)
 
-**Passo 5 - Dimostrazione Alta Disponibilità**
+## Passo 5 - Dimostrazione Alta Disponibilità
 
 Spengo un backend e osservo l'intero ciclo di HAProxy, misurato dalle metriche
 ```bash
@@ -128,7 +126,7 @@ podman stop  vagrant_web2_1   # ottengo un guasto  → health check falliscono �
 podman start vagrant_web2_1   # recovery → health check falliscono → web2 rientra nel bilanciamento e l'alternanza riprende.
 ```
 
-**Passo 6 - Esportazione sul Mac della Dashboard in formato json**
+## Passo 6 - Esportazione sul Mac della Dashboard in formato json
 Infine ho esportato da Grafana la dashboard in formato json, in modo da poterla riutilizzare e per vedere oltre all'importazione delle dashboard (come ho fatto con Nexus) anche come fare l'esportazione e l'ho salvato in una cartella `grafana/` che è presente come gli altri file in questa repo.
 
 ```bash
