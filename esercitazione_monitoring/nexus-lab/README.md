@@ -72,9 +72,12 @@ Ho poi scritto il file compose.yml attraverso il quale costruisco i container ch
 - **Nexus**
 - **Prometheus**
 - **Grafana**
-Definendo per ognuno l'immagine da Docker Hub, volume e porte descritte anche sopra.
 
-Ho poi costruito i container dentro la VM:
+Definendo per ognuno l'immagine da Docker Hub, volume e porte descritte anche sopra.
+Il parametro `INSTALL4J_ADD_VM_PARAMS=-Xms1g -Xmx2g -XX:MaxDirectMemorySize=2g` è la variabile d'ambiente con cui Nexus passa alla propria JVM i limiti di memoria, imponendo un heap che parte da 1 GB all'avvio (-Xms1g), non supera i 2 GB (-Xmx2g, il tetto oltre il quale la JVM solleva un `OutOfMemoryError` anziché continuare a consumare RAM) e una memoria off-heap (usata per l'I/O efficiente nel trasferimento degli artefatti) limitata a 2 GB (`-XX:MaxDirectMemorySize=2g`).
+Questo "budget di memoria" è necessario perché, lasciata libera, la JVM di Nexus tenderebbe ad allocare troppa RAM e, in una VM da soli 4 GB condivisa con Prometheus, Grafana e il sistema operativo, la manderebbe in swap degradando l'intero lab.
+
+Ho quindi costruito i container dentro la VM:
 
 ```bash
 vagrant ssh
