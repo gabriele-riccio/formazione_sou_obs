@@ -1,0 +1,8 @@
+# Segreti - non committare mai
+.env
+
+# Certificati e chiavi private
+certs/
+
+# File di stato eventuali
+*.log
