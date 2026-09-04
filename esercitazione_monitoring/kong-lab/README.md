@@ -69,7 +69,7 @@ kubectl create namespace kong
 helm repo add kong https://charts.konghq.com && helm repo update
 ```
 ## Passo 3 - Installazione di Kong DB-less
-Ho installato kong nel namespace, usando il file di values kong-values.yml scritto in precedenza per configurarlo in modalità DB-less(nessun database e configurazione dichiarativa), con l'Admin API disabilitato per sicurezza e il proxy esposto come NodePort.
+Ho installato kong nel namespace, usando il file di values kong-values.yml scritto in precedenza per configurarlo in modalità `DB-less` (nessun database e configurazione dichiarativa), con l'Admin API disabilitato per sicurezza e il proxy esposto come NodePort.
 > Il flag `--set ingressController.installCRDs=false` evita di reinstallare le Custom Resource Definition già presenti nel cluster.
 
 ```bash
@@ -77,6 +77,7 @@ Ho installato kong nel namespace, usando il file di values kong-values.yml scrit
 helm install kong kong/kong -n kong --values kong-values.yml \
   --set ingressController.installCRDs=false
 ```
+
 ## Passo 4 - Applicazione dell'app di test dietro Kong
 Poi ho creato un app di test, attraverso il manifest `httpbin.yml`, per dare a kong un servizio da monitorare, dato che senza un' applicazione a monte Kong non genererebbe metriche di traffico. E' un'app che espone endpoint HTTP dal comportamento prevedibile: `/get` restituisce un JSON con i dettagli della richiesta, `/status/404` e `/status/500` rispondono con quel preciso codice HTTP. Questo permette di generare traffico controllato e vedere le risposte comparire nelle metriche di Kong divise per codice di stato.
 
@@ -84,6 +85,7 @@ Applicando il manifest vengono creati 3 oggetti:
 - **Deployment**: Esegue e mantiene attivo il pod di httpbin e se esso muore viene ricreato.
 - **Service**: Indirizzo interno stabile per raggiungere il pod poiché gli IP dei pod cambiano di continuo, avevo bisogno di qualcosa che smistasse le richieste al pod corrente.
 - **Ingress**: E' la regola di instradamento che collega l'app a kong, dichiarando che il traffico sul path `/httpbin` debba essere inoltrato al Service httpbin.
+
 Catena completa : Una richiesta a `/httpbin/get` arriva al proxy di Kong, che grazie alla route generata dall'Ingress la inoltra al Service httpbin, che a sua volta la consegna al pod httpbin.
 La risposta torna indietro per la stessa strada, e nel passaggio Kong registra le metriche (codice di stato, latenza, banda) che poi Prometheus raccoglie.
 
@@ -101,13 +103,13 @@ kubectl apply -f kong-prometheus-plugin.yml
 ```
 ## Passo 6 - Stack di monitoraggio
 Dopodiché ho installato l'infrastruttura che raccoglie e visualizza le metriche, andando prima a creare un namespace separato `monitoring` per distinguere "l'applicazione da monitorare" dal "sistema che la monitora".
-Quindi ho installato nel nuovo namespace la chart helm `kube-prometheus-stack` che distribuisce, già integrati tra loro, Prometheus (distribuisce, già integrati tra loro, Prometheus (raccoglie e conserva le metriche), Grafana (per visualizzarle) e il Prometheus Operator (che sa quale Service andare a Scrapare grazie al ServiceMonitor).
+Quindi ho installato nel nuovo namespace la chart helm `kube-prometheus-stack` che distribuisce, già integrati tra loro, Prometheus(raccoglie e conserva le metriche), Grafana (per visualizzarle) e il Prometheus Operator (che sa quale Service andare a Scrapare grazie al ServiceMonitor).
 
 Le flag inserite:
 - `alertmanager.enabled=false` che disabilita gli alert, dato che avevo in mente di visualizzare soltanto le metriche.
 - `grafana.adminPassword=admin` che imposta una password semplice per grafana 
 - `prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false` che fa in modo che Prometheus adotti tutti i ServiceMonitor del cluster, per fargli adottare anche quello di
-  kong che spiego al prossimo punto, che altrimenti non troverebbe.
+  kong, che altrimenti non troverebbe.
   
 ```bash
 # 6. stack di monitoraggio
@@ -152,11 +154,13 @@ kubectl -n monitoring port-forward svc/monitoring-grafana 3000:80
 
 ## Dashboard
 
-Importata dal catalogo grafana.com — **Kong (official), ID 7424** — via
-*Dashboards → New → Import → ID 7424*. Sezioni: Request rate, Latencies, Bandwidth, Caching,
-Upstream, Nginx. I dati compaiono generando traffico attraverso il proxy.
+Importata dal catalogo grafana.com — **Kong (official), ID 7424** via *Dashboards → New → Import → ID 7424*.
+Sezioni: Request rate, Latencies, Bandwidth, Caching, Upstream, Nginx.
+I dati compaiono generando traffico attraverso il proxy.
 
-![seconda_parte](nexus/Screenshot%202026-09-01%20alle%2015.44.15.png)
+![seconda_parte](kong/Screenshot%202026-09-02%20alle%2014.39.27.png)
+![seconda_parte](kong/Screenshot%202026-09-02%20alle%2014.41.33.png)
+![seconda_parte](kong/Screenshot%202026-09-02%20alle%2014.41.45.png)
 
 ## Deployment: perché Kubernetes (nota teorica)
 
