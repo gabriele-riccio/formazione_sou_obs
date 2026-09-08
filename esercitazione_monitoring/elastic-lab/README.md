@@ -3,7 +3,7 @@
 Stack Elastic completo su Docker per raccogliere e visualizzare le **metriche di sistema**: **Elasticsearch + Kibana + Elastic Agent (Fleet)** con sicurezza attiva, TLS sul Fleet Server, viste Inventory/Hosts e una regola di alert sulla CPU.
 
 > **Contesto:** Sourcesense DevOps Academy — Track Observability
-> **Teoria di riferimento:** [`teoria/TEORIA.md`](teoria/TEORIA.md) — trattazione argomenti in 10 capitoli
+> **Teoria di riferimento:** [`TEORIA.md`](teoria/TEORIA.md) — trattazione argomenti in 10 capitoli
 > **Versione stack:** 8.15.0 · **Ambiente:** macOS + Docker Desktop
 
 ---
