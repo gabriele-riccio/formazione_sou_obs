@@ -19,23 +19,23 @@
 
 ---
 
-# Cap. 1 — Introduzione e posizionamento
+## Cap. 1 — Introduzione e posizionamento
 
-## Da dove nasce:
+### Da dove nasce:
 Alla base c'è **Apache Lucene**, libreria Java per la ricerca full-text che implementa l'**indice invertito**.
 Lucene però è solo una libreria(non è un server e non ha API di rete), per questo **Elasticsearch** la trasforma in un datastore distribuito con API REST, capacità di girare in un cluster multi-nodo, replica, scalabilità orizzontale e linguaggio di query via JSON.
 
 Attorno ad esso ci sono due strumenti **Logstash** (pipeline di ingestione, che raccoglie i dati da sorgenti, li trasforma e li scrive dentro Elasticsearch) e **Kibana** (interfaccia web per cercare, visualizzare e costruire dashboard sui dati).
 Le iniziali E-L-K formano lo **stack ELK**, oggi chiamato più inclusivamente **Elastic Stack**.
 
-## Perché si afferma sui log??
+### Perché si afferma sui log??
 Un log è un evento testuale semi-strutturato: *testo da cercare*.
 Il motivo per cui Elatic è lo standard per i logging sta tutto per come è fatto Elasticsearch, cioè nell'indice invertito ereditato da Lucene.
 
 Esso costruisce in anticipo un gigantesco indice analitico (come quello a fine libro), in cui per ogni parola è già scritto l'elenco esatto dei documenti che la contengono. Così, quando si cerca una parola , Elasticsearch non scorre nulla -  va direttamente alla voce e trova già pronta la lista.
 Grazie ad esso possiamo andare "dalla parola ai documenti" e non viceversava, rendendo la ricerca quasi istantanea anche su volumi enormi esattamente ciò che serve per l'analisi dei log.
 
-## Observability unificata — i tre segnali
+### Observability unificata — i tre segnali
 
 Esso però non si ferma soltanto ai log, ha un motore capace di indicizzare ed interrogare enormi quantità di eventi con timestamp per cui sarebbe stato fallimentare fermarsi ai log dato che possiamo fare la stessa cosa anche con le misurazioni di CPU oppure con le richieste HTTP tracciate da microservizi essendo tutti *eventi nel tempo* come i log.
 Attraverso Elastic possiamo monitorare tutti e 3 i segnali del monitoring e dell'observability:
@@ -50,14 +50,14 @@ Il valore pratico ha un nome preciso: **correlazione**.
 > In un mondo unificato invece, dalla metrica salti direttamente ai log di quel preciso host nella stessa UI in quel preciso minuto, e da lì alla traccia della richiesta            > problematica senza dovercambiare strumento.
 Il collante tecnico che rende possibile questa correlazione è l'ECS (spiego dopo).
 
-## Posizionamento vs Prometheus.
+### Posizionamento vs Prometheus.
 Prometheus è **specializzato** (solo metriche, modello pull, PromQL, molto efficiente) sa fare una cosa e la fa in un modo estremamente efficiente.
 Elastic rappresenta una filosofia **generalista e unificante** (tutti i segnali in un posto, retention lunga, ricerca full-text, ML).
 Compromesso di fondo: **specializzazione vs unificazione**. Non sono alternativi: spesso **coesistono** (cap. 9).
 
 ---
 
-# Cap. 2 — Anatomia dello stack (i "collaboratori")
+## Cap. 2 — Anatomia dello stack (i "collaboratori")
 L'Elastic Stack non è un prodotto singolo ma un insieme di componenti che si passano i dati lungo una **catena**:
 
 I dati vanno in una direzione; la *configurazione* viaggia in senso opposto (da Fleet verso gli agent).
@@ -91,20 +91,20 @@ I dati vanno in una direzione; la *configurazione* viaggia in senso opposto (da 
 > **Oggi consigliato: Elastic Agent + integration+ Fleet.**
 ---
 
-# Cap. 3 — Il modello push in profondità
+## Cap. 3 — Il modello push in profondità
 
-## Push vs pull — Chi apre la connessione? Agente o Server
+### Push vs pull — Chi apre la connessione? Agente o Server
 Vediamo i due modelli:
 - **Push (Elastic)**: l'**agent** gira sulla sorgente, raccoglie i dati e li *spinge*  verso Elasticsearch.
 - **Pull (Prometheus)**: il **server**(prometheus) fa *scrape* dei dati interrogando degli endpoint `/metrics` ad intervalli regolari.
 
-## Il ciclo della raccolta
+### Il ciclo della raccolta
 Il ciclo dell'agent Elastic ha tre fasi (ad ogni `period`):
 - Raccolta `collect`: l'agent interroga la sorgente locale (legge `/proc` , chiama l'API Docker, interroga il kubelet) e ottiene i valori grezzi.
 - Arricchimento `enrich` (aggiunge campi ECS e metadati che conosce **alla fonte**(host, cloud, pod).
 - Invio `send`: Impacchetta i documenti e li spinge (**push**) via API `_bulk`.
 
-## Parametro perid
+### Parametro perid
 Il period controlla ogni quanto l'agent esegue il ciclo per un dato metricset.
 Valori tipici: 10s per metriche di sistema veloci; molto più alti (un minuto o più) per API cloud lente e costose.
 È un compromesso: 
@@ -112,18 +112,18 @@ Valori tipici: 10s per metriche di sistema veloci; molto più alti (un minuto o 
 - più alto = meno dati e carico, ma più risoluzione.
 > Corrisponde concettualmente allo scrape_interval di Prometheus, cambia solo chi lo esegue.
 
-## L'API `_bulk` 
+### L'API `_bulk` 
 L'agent non invia un documento per volta ma usa l'API _bulk di Elasticsearch, che permette di inviare molti documenti in una sola richiesta HTTP. 
 Questo rappresenta il pattern standard di Elasticsearch per scritture ad alto volume.
 
-## Gestire una flotta di Agent con Fleet
+### Gestire una flotta di Agent con Fleet
 Il push distribuisce il lavoro di raccolta sugli agent, e mi ritroverei quindi con una flotta di agent da gestire.
 È il problema che Fleet risolve, ricentralizzando il controllo ottenendo il meglio dei due mondi:
 - La raccolta arricchita alla fonte del push, senza il caos di configurare mille macchine a mano
   ontrasto con Prometheus: lì il controllo è già centralizzato, ma il problema si sposta sulla service discovery.
 
 
-## Ponte con Prometheus (modulo Prometheus):
+### Ponte con Prometheus (modulo Prometheus):
 **Contrasto con Prometheus**: Lì il controllo è già centralizzato, ma il problema si sposta sulla service discovery.
 Inoltre Elastic si integra con Prometheus tramite il modulo/integration Prometheus, con tre modalità:
 - `collector`: Elastic fa lo scrape di un endpoint `/metrics` Prometheus e poi pusha su Elasticsearch, sbloccando tutti gli exporter Prometheus (per questo è il più usato);
@@ -132,7 +132,7 @@ Inoltre Elastic si integra con Prometheus tramite il modulo/integration Promethe
 
 ---
 
-# Cap. 4 — Che metriche espone e raccoglie Elastic??
+## Cap. 4 — Che metriche espone e raccoglie Elastic??
 
 Abbiamo visto le definizioni di **Modulo** = tecnologia o sorgente da cui raccogliere e **metricset** = gruppo di metriche correlate che il modulo prende insieme in una chiamata.
 In Elastic Agent: **integration → data stream** rappresentano lo stesso concetto, il risultato è sempre lo stesso tipo di oggetto:
@@ -156,18 +156,18 @@ Ci sono vari tipi di moduli, che poi vanno a raccogliere tipi di metriche divers
 
 ---
 
-# Cap. 5 — Il modello dati delle metriche
+## Cap. 5 — Il modello dati delle metriche
 
 **Una metrica = un documento JSON** con `@timestamp` (il *quando*), i valori (il *quanto*, i campi numerici, es. system.cpu.total.pct = 0.73), le dimensioni (il *di chi* es. host.name = web.01). È il punto storicamente debole (occupa più di un TSDB puro); il resto del capitolo è la risposta.
 > Il fatto che una metrica sia "solo" un documento JSON permette a Elasticsearch di trattare metriche, log e tracce con lo stesso motore ma è anche il punto storicamente debole:
 > un documento JSON generico occupa più spazio di come lo stesso dato verrebbe salvato in un TSDB specializzato.
 > Vediamo come Elastic risponde a questa debolezza.
 
-## ECS (Elastic Common Schema) e la convergenza con OTEL
+### ECS (Elastic Common Schema) e la convergenza con OTEL
 Esso è un dizionario comune di nomi e tipi di campo: (es `host.name`, `cloud.provider`, ID del container `container.id`) che abilita la **correlazione** tra segnali(se log, metrica e traccia usano tutti host.name , possono essere correlati).
 E' stato donato a OpenTelemetry ed Elastic sta lavorando alla convergenza tra **ECS e OTel Semantic Conventions**.
 
-## Data stream, rollover, naming data stream, TSDS, efficenza di Storage
+### Data stream, rollover, naming data stream, TSDS, efficenza di Storage
 Storicamente Elasticsearch memorizza in indici, ma essendo i dati `time-series` append-only essi crescono all'infinito e per questo motivo un unico indice diventerebbe ingestibile.
 Soluzione:
 - **Data stream**: Un' astrazione su una sequenza di indici sottostanti --> Leggi e scrivi con un solo nome, mentre dietro le quinte Elasticsearch crea nuovi indici col meccanismo
@@ -194,15 +194,15 @@ Cosa Cambia:
     grezza, ma la ricostruisce al volo dai dati indicizzati. Ulteriore risparmio, al piccolo prezzo di un costo computazionale nella ricostruzione.
 ---
 
-# Cap. 6 — Configurazione e ciclo di vita
-## Flusso:
+## Cap. 6 — Configurazione e ciclo di vita
+### Flusso:
 In Fleet/Integrations aggiungo un'integration a una policy, configuro le opzioni(data stream/metricset/`period`/filtri/credenziali) e Fleet la propaga a tutti gli agent iscritti. Il modello è **dichiarativo e centralizzato**(Dichiaro cosa voglio in un posto e Fleet lo fa combaciare con la realtà) e inoltre ne discende un'organizzazione per policy diverse per ruoli diversi(web server, database server, nodi Kubernetes).
 
-## Output:
+### Output:
 Definisce dove gli agent spediscono i dati (Elasticsearch (normale) o Logstash se serve una trasformazione).
 Sicurezza con **API key** per l'autenticazione gestita da Fleet nell'enrollment + **TLS** per la cifratura.
 
-## ILM (Index Lifecycle Management)
+### ILM (Index Lifecycle Management)
 Gestisce il ciclo vita degli indici in fasi:
 - **hot**: dati recenti e attivi, hard‐ ware veloce, qui avviene il rollover;
 - **warm**: non più scritti ma ancora interrogati force-merge, shrink;
@@ -219,7 +219,7 @@ Per cluster **self-managed** a tier(fasi)-->Retention e controllo costi.
   -  `health/status` (monitoraggio dello stato di ogni agent).
 ---
 
-# Cap. 7 — Query e visualizzazione in Kibana
+## Cap. 7 — Query e visualizzazione in Kibana
 
 - **Lens** — Strumento di visualizzazione con filosofia **drag-and-drop**, lavora sopra le **data view** (un pattern di nomi di data stream, per le metriche `metrics-*` o `metrics
   system.*`). Trascino **campi metrica** (sull'asse dei valori) e **campi dimensione** (come suddivisione): "CPU media per host nel tempo".
@@ -248,7 +248,7 @@ Per cluster **self-managed** a tier(fasi)-->Retention e controllo costi.
 
 ---
 
-# Cap. 8 — Alerting
+## Cap. 8 — Alerting
 Nessuno può fissare una dashboard 24 ore su 24: serve che il sistema avvisi da solo.
 Motore a **due tempi**: una **regola**(rule) definisce una **condizione** valutata a intervalli regolari ("la CPU media di un host supera il 90% per 5 minuti"); quando la condizione
 **scatta*, la regola esegue **azioni**(actions) attraverso **connettori**(connectors).
@@ -275,7 +275,7 @@ Ci sono varie regole:
 
 ---
 
-# Cap. 9 — Elastic vs Prometheus
+## Cap. 9 — Elastic vs Prometheus
 
 | | **Elastic** | **Prometheus** |
 |---|---|---|
@@ -289,7 +289,7 @@ Ci sono varie regole:
 
 ---
 
-# Cap. 10 — Elastic e OpenTelemetry
+## Cap. 10 — Elastic e OpenTelemetry
 
 - **OpenTelemetry (OTel)** — standard aperto CNCF per metriche/log/tracce, vendor-neutral. Trasporto: **OTLP** (gRPC/HTTP).
 - **Ingestione OTLP nativa** — l'APM Server / integration APM riceve OTLP: puoi puntare qualsiasi Collector/SDK OTel verso Elastic.
