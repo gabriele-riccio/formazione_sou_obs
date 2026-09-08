@@ -19,9 +19,9 @@
 
 ---
 
-## Cap. 1 — Introduzione e posizionamento
+# Cap. 1 — Introduzione e posizionamento
 
-**Da dove nasce**:
+## Da dove nasce:
 Alla base c'è **Apache Lucene**, libreria Java per la ricerca full-text che implementa l'**indice invertito**.
 Lucene però è solo una libreria(non è un server e non ha API di rete), per questo **Elasticsearch** la trasforma in un datastore distribuito con API REST, capacità di girare in un cluster multi-nodo, replica, scalabilità orizzontale e linguaggio di query via JSON.
 
@@ -57,7 +57,7 @@ Compromesso di fondo: **specializzazione vs unificazione**. Non sono alternativi
 
 ---
 
-## Cap. 2 — Anatomia dello stack (i "collaboratori")
+# Cap. 2 — Anatomia dello stack (i "collaboratori")
 L'Elastic Stack non è un prodotto singolo ma un insieme di componenti che si passano i dati lungo una **catena**:
 
 I dati vanno in una direzione; la *configurazione* viaggia in senso opposto (da Fleet verso gli agent).
@@ -91,7 +91,7 @@ I dati vanno in una direzione; la *configurazione* viaggia in senso opposto (da 
 > **Oggi consigliato: Elastic Agent + integration+ Fleet.**
 ---
 
-## Cap. 3 — Il modello push in profondità
+# Cap. 3 — Il modello push in profondità
 
 ## Push vs pull — Chi apre la connessione? Agente o Server
 Vediamo i due modelli:
@@ -112,11 +112,11 @@ Valori tipici: 10s per metriche di sistema veloci; molto più alti (un minuto o 
 - più alto = meno dati e carico, ma più risoluzione.
 > Corrisponde concettualmente allo scrape_interval di Prometheus, cambia solo chi lo esegue.
 
-# L'API `_bulk` 
+## L'API `_bulk` 
 L'agent non invia un documento per volta ma usa l'API _bulk di Elasticsearch, che permette di inviare molti documenti in una sola richiesta HTTP. 
 Questo rappresenta il pattern standard di Elasticsearch per scritture ad alto volume.
 
-# Gestire una flotta di Agent con Fleet
+## Gestire una flotta di Agent con Fleet
 Il push distribuisce il lavoro di raccolta sugli agent, e mi ritroverei quindi con una flotta di agent da gestire.
 È il problema che Fleet risolve, ricentralizzando il controllo ottenendo il meglio dei due mondi:
 - La raccolta arricchita alla fonte del push, senza il caos di configurare mille macchine a mano
@@ -132,7 +132,7 @@ Inoltre Elastic si integra con Prometheus tramite il modulo/integration Promethe
 
 ---
 
-## Cap. 4 — Che metriche espone e raccoglie Elastic??
+# Cap. 4 — Che metriche espone e raccoglie Elastic??
 
 Abbiamo visto le definizioni di **Modulo** = tecnologia o sorgente da cui raccogliere e **metricset** = gruppo di metriche correlate che il modulo prende insieme in una chiamata.
 In Elastic Agent: **integration → data stream** rappresentano lo stesso concetto, il risultato è sempre lo stesso tipo di oggetto:
@@ -156,7 +156,7 @@ Ci sono vari tipi di moduli, che poi vanno a raccogliere tipi di metriche divers
 
 ---
 
-## Cap. 5 — Il modello dati delle metriche
+# Cap. 5 — Il modello dati delle metriche
 
 **Una metrica = un documento JSON** con `@timestamp` (il *quando*), i valori (il *quanto*, i campi numerici, es. system.cpu.total.pct = 0.73), le dimensioni (il *di chi* es. host.name = web.01). È il punto storicamente debole (occupa più di un TSDB puro); il resto del capitolo è la risposta.
 > Il fatto che una metrica sia "solo" un documento JSON permette a Elasticsearch di trattare metriche, log e tracce con lo stesso motore ma è anche il punto storicamente debole:
@@ -194,11 +194,11 @@ Cosa Cambia:
     grezza, ma la ricostruisce al volo dai dati indicizzati. Ulteriore risparmio, al piccolo prezzo di un costo computazionale nella ricostruzione.
 ---
 
-## Cap. 6 — Configurazione e ciclo di vita
-# Flusso:
+# Cap. 6 — Configurazione e ciclo di vita
+## Flusso:
 In Fleet/Integrations aggiungo un'integration a una policy, configuro le opzioni(data stream/metricset/`period`/filtri/credenziali) e Fleet la propaga a tutti gli agent iscritti. Il modello è **dichiarativo e centralizzato**(Dichiaro cosa voglio in un posto e Fleet lo fa combaciare con la realtà) e inoltre ne discende un'organizzazione per policy diverse per ruoli diversi(web server, database server, nodi Kubernetes).
 
-# Output:
+## Output:
 Definisce dove gli agent spediscono i dati (Elasticsearch (normale) o Logstash se serve una trasformazione).
 Sicurezza con **API key** per l'autenticazione gestita da Fleet nell'enrollment + **TLS** per la cifratura.
 
@@ -219,7 +219,7 @@ Per cluster **self-managed** a tier(fasi)-->Retention e controllo costi.
   -  `health/status` (monitoraggio dello stato di ogni agent).
 ---
 
-## Cap. 7 — Query e visualizzazione in Kibana
+# Cap. 7 — Query e visualizzazione in Kibana
 
 - **Lens** — Strumento di visualizzazione con filosofia **drag-and-drop**, lavora sopra le **data view** (un pattern di nomi di data stream, per le metriche `metrics-*` o `metrics
   system.*`). Trascino **campi metrica** (sull'asse dei valori) e **campi dimensione** (come suddivisione): "CPU media per host nel tempo".
@@ -248,7 +248,7 @@ Per cluster **self-managed** a tier(fasi)-->Retention e controllo costi.
 
 ---
 
-## Cap. 8 — Alerting
+# Cap. 8 — Alerting
 Nessuno può fissare una dashboard 24 ore su 24: serve che il sistema avvisi da solo.
 Motore a **due tempi**: una **regola**(rule) definisce una **condizione** valutata a intervalli regolari ("la CPU media di un host supera il 90% per 5 minuti"); quando la condizione
 **scatta*, la regola esegue **azioni**(actions) attraverso **connettori**(connectors).
@@ -275,7 +275,7 @@ Ci sono varie regole:
 
 ---
 
-## Cap. 9 — Elastic vs Prometheus
+# Cap. 9 — Elastic vs Prometheus
 
 | | **Elastic** | **Prometheus** |
 |---|---|---|
@@ -289,7 +289,7 @@ Ci sono varie regole:
 
 ---
 
-## Cap. 10 — Elastic e OpenTelemetry
+# Cap. 10 — Elastic e OpenTelemetry
 
 - **OpenTelemetry (OTel)** — standard aperto CNCF per metriche/log/tracce, vendor-neutral. Trasporto: **OTLP** (gRPC/HTTP).
 - **Ingestione OTLP nativa** — l'APM Server / integration APM riceve OTLP: puoi puntare qualsiasi Collector/SDK OTel verso Elastic.
