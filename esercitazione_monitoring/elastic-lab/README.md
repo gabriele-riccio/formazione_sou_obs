@@ -70,8 +70,7 @@ elastic-lab/
 
 ### 0. Preparazione
 Per prima cosa ho creato la cartella di lavoro ho creato una rete Docker `elastic-lab-net` dedicata, dove i container si vedono per nome e così possono comunicare tra loro.
-Ho dovuto generare un certificato self-signed valido per i nomi flette-server e localhost dato che a differenza di Elasticsearch e Kibana, Fleet Server pretende TLS sulla porta 8220.
-Quindi ho generato, tramite il comando openssl rea -x509, il certificato autofirmato e con newkey rsa:2048 -nodes la chiave privata( 2048 bit senza passphrase e -nodes = noDES senza password),creando la cartella certs dove poi sono finiti i file prodotti(fleet-server.crt e fleet-server.key, certificato e chiave) con durata di un anno e altre flag per l'identità del certificato.
+Ho dovuto generare un certificato `self-signed` valido per `fleet-server` e `localhost` dato che a differenza di **Elasticsearch e Kibana, Fleet Server pretende TLS sulla porta 8220**. Quindi ho generato, tramite il comando `openssl rea -x509`, il certificato autofirmato e con `newkey rsa:2048 -nodes` la chiave privata( 2048 bit senza passphrase e con *-nodes = noDES* senza password),creando la cartella `certs` dove poi sono finiti i file prodotti(`fleet-server.crt` e `fleet-server.key`, certificato e chiave) con durata di un anno e altre flag per l'identità del certificato.
 
 ```bash
 mkdir -p elastic-lab && cd elastic-lab
@@ -85,20 +84,22 @@ mkdir -p certs && openssl req -x509 -newkey rsa:2048 -nodes \
   -subj "/CN=fleet-server" \
   -addext "subjectAltName=DNS:fleet-server,DNS:localhost"
 ```
-
+---
 ### 1. File `.env` (segreti)
-Prima di costruire il Docker compose con i servizi che mi serviranno, ho configurato il file .env per i segreti (password, token,...) che verranno chiamati con la sintassi ${VARIABILE}, per pubblicare su GitHub il docker-compose.yml in tutta sicurezza.
+Prima di costruire il compose con i servizi che mi serviranno, ho configurato il file `.env` per i segreti (password, token,etc) che verranno chiamati con la sintassi `${VARIABILE}`, per pubblicare su GitHub il `docker-compose.yml` in tutta sicurezza.
 
 ```env
 ELASTIC_PASSWORD=password_usata_da_me
 KIBANA_PASSWORD=password_usata_da_me_kibana
-KIBANA_ENCRYPTION_KEY=una_chiave_lunga_almeno_32_caratteri_123456
+KIBANA_ENCRYPTION_KEY=una_chiave_lunga_almeno_32_caratteri_123456 #verrà presa direttamente non serve scriverla
 FLEET_SERVER_SERVICE_TOKEN=token_generato_poi
 ```
+---
 ### 2. Avvia lo stack base (senza il Fleet Server)
 
 > Il fleet-server ha bisogno del token, che devo generare dopo dato che non ho le password.
-Ho costruito un unico docker-compose.yml con 4 servizi in catena elasticsearch, kibana_setup, kibana, fleet-server più la rete docker.
+
+Ho costruito un unico `docker-compose.yml` con 4 servizi in catena `elasticsearch`, `kibana_setup`, `kibana`, `fleet-server` più la rete docker.
 #### Servizio `elasticsearch`
 
 | Riga | Significato |
@@ -169,7 +170,8 @@ networks:
 
 `external: true` dice al compose di **non creare** una rete nuova, ma di usare quella `elastic-lab-net` creata a mano con `docker network create` (`external` = "esiste già, fuori da questo file").
 
-Per cui non mi è restato che farlo partire, e seguire la catena: elasticsearch diventa healthy (~30-60s) → kibana_setup imposta la password di kibana_system ed esce con Exited (0) → kibana parte(ci vuole un pò di più dato che installerà i pacchetti Fleet).
+Per cui non mi è restato che farlo partire, e seguire la catena: `elasticsearch` diventa healthy (~30-60s) → `kibana_setup` imposta la password di kibana_system ed esce con *Exited (0)* → `kibana` parte(ci vuole un pò di più dato che installerà i pacchetti Fleet).
+
 ```bash
 docker compose up -d elasticsearch kibana_setup kibana
 
@@ -178,8 +180,9 @@ docker compose ps
 # elasticsearch: Up (healthy) · kibana: Up · kibana_setup: Exited (0)
 # Catena: ES sano → password → Kibana.
 ```
+---
 ### 3. Service token + Fleet Server
-Come detto Fleet ha bisogno di un service token tramite si può autenticare. Per prima cosa lo genero una volta che elasticsearch è healty usando la password di Elastic, poi lo inserisco nel file .env come FLEET_SERVER_SERVICE_TOKEN=AAEA... .
+Come detto Fleet ha bisogno di un service token tramite il quale riesce ad autenticarsi. Per prima cosa lo genero una volta che elasticsearch è healty usando la password di `Elastic`, poi lo inserisco nel file `.env` come `FLEET_SERVER_SERVICE_TOKEN=AAEA...`.
 
 ```bash
 # 3.1 genera il token (usa la tua ELASTIC_PASSWORD)
@@ -189,20 +192,20 @@ curl -s -u elastic:LA_TUA_PASSWORD -X POST \
 # copio il "value" e lo metto nel .env come FLEET_SERVER_SERVICE_TOKEN
 ```
 **3.2 Crea la policy in Kibana**:
-Poi creo la policy del Fleet Server in Kibana, dato che il fleet server cerca una policy con id fleet-server-policy che ho impostato nel compose.
+Poi creo la policy del Fleet Server in Kibana, dato che esso cerca una policy con id `fleet-server-policy` che ho impostato nel compose.
 La creo dall'interfaccia:
 - Apro `http://localhost:5601` e accedo con utente elastic e la mia password;
 - Vado su Fleet (menu → Management → Fleet, oppure /app/fleet );
 - Tab **Agents** → **Add Fleet Server** → **Quick Start**.
-- Come host imposto https://fleet-server:8220 e premendo continue comparirà "Fleet Server policy created".
+- Come host imposto `https://fleet-server:8220` e premendo continue comparirà `Fleet Server policy created`.
 
-**3.3 Avvio il Fleet Server**
+**3.3 Avvio il Fleet Server e Verifica**
 
 ```bash
-# 3.3 avvia il Fleet Server
+#  avvia il Fleet Server
 docker compose up -d fleet-server
 
-# 3.4 verifica (dopo ~40s)
+#  verifica (dopo ~40s)
 docker logs --tail 15 fleet-server
 # atteso: "Running on policy with Fleet Server integration: fleet-server-policy" · HEALTHY
 ```
@@ -211,11 +214,13 @@ In **Fleet → Agents** il Fleet Server deve comparire **Healthy** (verde) da **
 ![seconda_parte](elastic/Screenshot%202026-09-08%20alle%2012.56.59.png)
 ![seconda_parte](elastic/Screenshot%202026-09-08%20alle%2012.57.08.png)
 
+---
+
 ### 4. Visualizzare e Raccogliere le metriche di sistema
-Con Fleet Server sano, la policy che ho creato include già il monitoraggio di sistema. L'Elastic Agent (che il Fleet Server incorpora) raccoglie i metricset del modulo system e li invia a Elasticsearch.
+Con Fleet Server sano, la policy che ho creato include già il monitoraggio di sistema. L'Elastic Agent (che il Fleet Server incorpora) raccoglie i `metricset` del modulo `system` e li invia a Elasticsearch.
 
 **4.1. Confermo che le metriche arrivano**
-Nei log del fleet-server dovrei vedere i metricset raccolti con successo:
+Nei log del `fleet-server` dovrei vedere i metricset raccolti con successo:
 
 ```bash
 docker logs --tail 20 fleet-server
@@ -226,33 +231,58 @@ docker logs --tail 20 fleet-server
 ```
 
 **4.1. Visualizzazione in Kibana**
-Apro l'app Observability che mostreranno l'infrastruttura
+Apro l'app Observability che mostrerà l'infrastruttura:
 - **Inventory** → `http://localhost:5601/app/metrics/inventory`
 - **Hosts** → `http://localhost:5601/app/metrics/hosts`
+I dati vivono in data stream `metrics-system.*` e arrivano tramite il modello push -> l'agent raccoglie, arricchisce e spinge.
+
 Vedrò il mio host con CPU, memoria, rete, disco graficati:
 ![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.04.55.png)
 ![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.40.38.png)
 ![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.05.15.png)
 ![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.05.21.png)
 ![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.05.29.png)
+![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.41.29.png)
 
+---
+
+## Aggiunta finale alert sulla CPU
 ### 5. Alert sulla CPU
+Chiudo includendo una regola di alerting **Custom Treshold** (è la più comune: scatta quando una metrica **supera (o scende sotto) un valore**)
 
-Observability → Alerts → Rules → **Create rule** → **Custom threshold**:
-- **Data view:** `metrics-*`
-- **Condizione:** `AVERAGE` di `system.cpu.total.norm.pct` **IS ABOVE 0.2** (20%)
-- **Actions:** vuote · **Save**
+> Premessa: L'alerting richiede la chiave di cifratura di kibana, l'ho aggiunta in un secondo momento nell' `.env` e poi ho ricreato Kibana.
 
-Testa generando carico:
+Poi ho effettivamente creato la regola:
+- Su **Observability → Alerts → Rules → Create rule → Custom threshold**;
+- **Name** - `CPU alta-lab`;
+- **Data view:** Seleziono `metrics-*` e non il `logs-*` che è di default;
+- **Condizione:** Aggregation **Average** del campo `system.cpu.total.norm.pct` , **IS ABOVE 0.2** (= 20%, soglia bassa per il lab, di solito in produzione è 0.8-0.9)
+- **Actions:** vuote
+- **Save**
+![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.41.29.png)
+![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.41.29.png)
+![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.41.29.png)
+
+Generando carico CPU con un container busybox `cpu-stress` (in modo di generarlo in maniera controllata) vedrò man mano il carico della CPU (CPU Usare) aumentare nella dashboard:
 
 ```bash
 docker run --rm -d --name cpu-stress --network elastic-lab-net \
   busybox sh -c "while true; do :; done"
-# guarda /app/observability/alerts → l'alert passa a "Active"
+```
+![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.57.01.png)
+![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2012.05.33.png)
+![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2012.08.45.png)
+![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2012.09.09.png)
+![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2012.09.25.png)
+![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2012.14.32.png)
 
-# ⚠️ POI SPEGNILO (il loop è infinito):
+
+```bash
+# Dopo spegnere essendo infinito, vedrò l'allert tornare da Active a Recovered
 docker rm -f cpu-stress
 ```
+![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2012.22.43.png)
+![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2012.23.01.png)
 
 ---
 
