@@ -259,9 +259,9 @@ Poi ho effettivamente creato la regola:
 - **Condizione:** Aggregation **Average** del campo `system.cpu.total.norm.pct` , **IS ABOVE 0.2** (= 20%, soglia bassa per il lab, di solito in produzione è 0.8-0.9)
 - **Actions:** vuote
 - **Save**
-![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.41.29.png)
-![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.41.29.png)
-![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.41.29.png)
+![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.53.20.png)
+![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.53.21.png)
+![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.55.07.png)
 
 Generando carico CPU con un container busybox `cpu-stress` (in modo di generarlo in maniera controllata) vedrò man mano il carico della CPU (CPU Usare) aumentare nella dashboard:
 
@@ -269,6 +269,8 @@ Generando carico CPU con un container busybox `cpu-stress` (in modo di generarlo
 docker run --rm -d --name cpu-stress --network elastic-lab-net \
   busybox sh -c "while true; do :; done"
 ```
+
+
 ![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.57.01.png)
 ![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2012.05.33.png)
 ![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2012.08.45.png)
@@ -277,10 +279,13 @@ docker run --rm -d --name cpu-stress --network elastic-lab-net \
 ![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2012.14.32.png)
 
 
+
 ```bash
 # Dopo spegnere essendo infinito, vedrò l'allert tornare da Active a Recovered
 docker rm -f cpu-stress
 ```
+
+
 ![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2012.22.43.png)
 ![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2012.23.01.png)
 
