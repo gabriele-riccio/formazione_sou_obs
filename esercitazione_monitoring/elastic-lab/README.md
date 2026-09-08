@@ -211,12 +211,30 @@ In **Fleet → Agents** il Fleet Server deve comparire **Healthy** (verde) da **
 ![seconda_parte](elastic/Screenshot%202026-09-08%20alle%2012.56.59.png)
 ![seconda_parte](elastic/Screenshot%202026-09-08%20alle%2012.57.08.png)
 
-### 4. Visualizza le metriche
+### 4. Visualizzare e Raccogliere le metriche di sistema
+Con Fleet Server sano, la policy che ho creato include già il monitoraggio di sistema. L'Elastic Agent (che il Fleet Server incorpora) raccoglie i metricset del modulo system e li invia a Elasticsearch.
 
+**4.1. Confermo che le metriche arrivano**
+Nei log del fleet-server dovrei vedere i metricset raccolti con successo:
+
+```bash
+docker logs --tail 20 fleet-server
+# ci sono  righe come:
+# "metricbeat":{"system":{"cpu":{"events":3,"success":3},
+#   "memory":{...}, "network":{...}, "diskio":{...}, ...}}
+# e "output":{"events":{"acked":N ...}}  <- inviati a Elasticsearch
+```
+
+**4.1. Visualizzazione in Kibana**
+Apro l'app Observability che mostreranno l'infrastruttura
 - **Inventory** → `http://localhost:5601/app/metrics/inventory`
 - **Hosts** → `http://localhost:5601/app/metrics/hosts`
-
-Dovresti vedere il tuo host con CPU, memoria, rete, disco graficati.
+Vedrò il mio host con CPU, memoria, rete, disco graficati:
+![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.04.55.png)
+![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.40.38.png)
+![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.05.15.png)
+![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.05.21.png)
+![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.05.29.png)
 
 ### 5. Alert sulla CPU
 
@@ -246,62 +264,3 @@ docker compose start    # riaccendi
 docker compose ps -a    # stato
 docker stats --no-stream  # consumo risorse
 ```
-
-> ⚠️ **Non usare `docker compose down -v`** per lo spegnimento: cancella i volumi (dati, policy, **token**). Usa `stop`. Il `-v` serve solo per ripartire davvero da zero — e in quel caso vanno rigenerati token e policy.
-
----
-
-## Sicurezza e Git
-
-`.gitignore` (già in cartella) esclude i segreti:
-
-```gitignore
-.env
-certs/
-*.log
-*.pdf
-```
-
-**Verifica che Git ignori davvero i segreti** prima di pushare:
-
-```bash
-# devono stampare una riga (= ignorati)
-git check-ignore -v .env
-git check-ignore -v certs/fleet-server.key
-
-# il compose NON deve contenere segreti in chiaro (nessun output atteso)
-grep -E "password_reale|token_reale|chiave_reale" docker-compose.yml
-
-# ma Docker DEVE risolverli dal .env (i valori veri compaiono qui)
-docker compose config | grep -E "ELASTIC_PASSWORD|SERVICE_TOKEN|ENCRYPTIONKEY"
-```
-
-Commit:
-
-```bash
-git add elastic-lab
-git status            # conferma: .env e certs/ NON in lista
-git commit -m "Aggiungi lab Elastic (compose + docs, segreti esclusi)"
-git push
-```
-
----
-
-## Troubleshooting
-
-| Sintomo | Causa / soluzione |
-|---|---|
-| ES resta `health: starting` | Password nell'healthcheck non combacia con `.env`. Testa con `curl -u elastic:...`. |
-| Fleet: `401 failed to authenticate service account` | Token non valido (tipico dopo `down -v`). Rigenera (passo 3.1), aggiorna `.env`, ricrea il fleet-server. |
-| Fleet: `Waiting on policy... fleet-server-policy` | Policy assente o id sbagliato. Creala col wizard (passo 3.2); id = `fleet-server-policy`. |
-| Fleet: `connection refused localhost:9200` | Output errato. Fleet → Settings → Outputs → host `http://elasticsearch:9200`. Poi `--force-recreate`. |
-| Fleet: `x509: certificate signed by unknown authority` | Manca la CA. Verifica `FLEET_CA=/certs/fleet-server.crt` + `FLEET_URL=https://fleet-server:8220`. Non mischiare `FLEET_INSECURE` con `FLEET_CA`. |
-| Alert: `encryption key required` | Manca `XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY` (≥32 char). Aggiungi al `.env` e ricrea Kibana. |
-| Log `add_cloud_metadata 169.254.169.254` | Innocuo: l'agent cerca metadati cloud inesistenti in locale. Ignora. |
-
-> Per ricreare un solo servizio dopo una modifica: `docker compose up -d --force-recreate <servizio>`
-
----
-
-*Guida operativa. Per la teoria completa vedi [`TEORIA.md`](./TEORIA.md).*
-
