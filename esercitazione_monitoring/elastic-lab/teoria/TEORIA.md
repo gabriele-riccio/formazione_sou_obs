@@ -148,7 +148,7 @@ Ci sono vari tipi di moduli, che poi vanno a raccogliere tipi di metriche divers
     - metricset di **utilizzo** (dal kubelet): `node`, `pod`, `container`, `volume`, `apiserver`, `scheduler`…
     - metricset di **stato** (da kube-state-metrics): `state_pod`, `state_deployment`, `state_node`, `state_replicaset`, `state_daemonset`, `state_job`.
     > *KSM va installato nel cluster.*
-    Distinzione chiave: `pod` ti dice **quanto consuma** un pod (kubectkl); `state_pod` ti dice **in che stato è** (Running, Pending, CrashLoopBackOff; KSM).
+    > Distinzione chiave: `pod` ti dice **quanto consuma** un pod (kubectkl); `state_pod` ti dice **in che stato è** (Running, Pending, CrashLoopBackOff; KSM).
 - **Database:** `mysql`, `postgresql`, `redis`, `mongodb`, `mssql`, `oracle` (metricset `status`, `performance`, `replication`…).
 - **Cloud (via API del provider):** AWS (CloudWatch: EC2, S3, RDS, Lambda…), GCP (Cloud Monitoring), Azure (Azure Monitor).
 
@@ -221,31 +221,57 @@ Per cluster **self-managed** a tier(fasi)-->Retention e controllo costi.
 
 ## Cap. 7 — Query e visualizzazione in Kibana
 
-- **Lens** — editor **drag-and-drop** raccomandato, sopra le **data view** (`metrics-*`). Trascini metriche e dimensioni.
-- **TSVB** — storico per serie temporali, **deprecato** in favore di Lens. ⚠️ *Verificare se rimosso in 9.x.*
-- **ES|QL** — linguaggio **a pipe** (`|`), analogo a SQL/PromQL. Esempio:
+- **Lens** — Strumento di visualizzazione con filosofia **drag-and-drop**, lavora sopra le **data view** (un pattern di nomi di data stream, per le metriche `metrics-*` o `metrics
+  system.*`). Trascino **campi metrica** (sull'asse dei valori) e **campi dimensione** (come suddivisione): "CPU media per host nel tempo".
+  Sceglie default intelligenti ma lascia il controllo su tipo di grafico, aggregazione (media, max, percentile, `rate` per i counter) e intervallo.
+  
+- **TSVB** (Time Series Visual Builder) — Strumento storico per grafici e serie temporali, **deprecato** in favore di Lens.
+- **ES|QL** — linguaggio di query strategico di Elastico **a pipe** (la query si costruisce come una catena di comandi collegati da `|`), analogo a SQL/PromQL.
+  Esempio:
   ```
   FROM metrics-system.cpu-*
   | WHERE @timestamp > NOW() - 1 hour
   | STATS avg_cpu = AVG(system.cpu.total.pct) BY host.name
   | SORT avg_cpu DESC
   ```
-  ⚠️ *Versione GA (~8.14) e comandi time-series da verificare.*
-- **App Observability:** **Inventory** (topologia di host/container/pod), **Hosts** (analisi host-centrica), Metrics Explorer (legacy).
-- **Dashboard + drill-down:** pannelli Lens/ES|QL in una vista persistente; dal pannello salti a Inventory/Hosts o ai log (root-cause analysis).
+  "Prendi dai data stream della CPU, filtra l'ultima ora, calcola la CPU media raggruppata per host, ordina dal più carico."
+  
+- **App Observability** - Kibana offre app curate per l'infrastruttura già pronte:
+  - **Inventory** (topologia di host/container/pod);
+  - **Hosts** (analisi host-centrica);
+  - **Metrics Explorer**(legacy).
+    Realizzano concretamente la correlazione.
+- La **Dashboard** mette insieme più visualizzazioni in una vista persistente.
+  Flusso: crei i `pannelli` con Lens (o ES|QL), li aggiungi a una `Dashboard`, aggiungi `filtri e controlli`, imposti l'`intervallo temporale`.
+- Il **drill-down** chiude il cerchio - da un pannello salti verso Inventory/Hosts o i log correlati, portando il contesto (host, timeframe).
+  È il gesto della **root-cause analysis**: dalla dashboard che dice che c'è un problema ed arrivi al perché.
 
 ---
 
 ## Cap. 8 — Alerting
+Nessuno può fissare una dashboard 24 ore su 24: serve che il sistema avvisi da solo.
+Motore a **due tempi**: una **regola**(rule) definisce una **condizione** valutata a intervalli regolari ("la CPU media di un host supera il 90% per 5 minuti"); quando la condizione
+**scatta*, la regola esegue **azioni**(actions) attraverso **connettori**(connectors).
+Ci sono varie regole:
+- Regola **Custom threshold** — Regola a soglia più comune, scatta quando una metrica supera o scende sotto un valore (esempio nel lab). Sostituisce la legacy *Metric threshold*, è
+  basata sulle **data view**, che combina più metriche e aggregazioni in un'unica condizione, con raggruppamento per dimensione.
+  Elemento pratico: nella condizione specifichi metrica + aggregazione + soglia + durata.
+- Regola **Inventory** — Pensata per alertare sulle entità di infrastruttura (host, pod, container) viste come oggetti: "avvisami se un qualsiasi host supera il 90% di CPU".
+  È **entità-centrica** e comoda per applicare una regola automaticamente a tutte le entità di un tipo, comprese quelle future, ed è preziosa in ambienti dinamici.
+- Regola **Anomaly detection (ML)** — Le soglie fisse hanno un limite: **quale soglia?** L'80% è "normale" per un server batch e "anomalo" per un web server a riposo.
+  L'anomaly detection via `Machine Learning`, c'è un **job ML che impara il comportamento normale di una metrica**, inclusi i cicli giorno/notte, feriali/ festivi ed assegna uno
+  **score di anomalia** quando il valore si discosta in modo significativo.
+  - Vantaggio: meno rumore e cattura di problemi contestuali che le soglie mancano.
+  - Prezzo: va addestrato ed è più opaco.
 
-Motore a **due tempi**: una **regola** valuta una condizione a intervalli; quando scatta, esegue **azioni** via **connettori**.
-
-- **Custom threshold** — soglia su metrica (metrica + aggregazione + soglia + durata). Sostituisce la legacy *Metric threshold*.
-- **Inventory** — soglie entità-centriche su host/pod/container (anche quelli futuri).
-- **Anomaly detection (ML)** — impara il comportamento normale (inclusi i cicli) e alerta sullo score di anomalia. Meno rumore, cattura anomalie contestuali.
-- **SLO + burn-rate** — SLI (misura) → SLO (obiettivo) → error budget (margine) → burn-rate (velocità di consumo). Alerta sull'**impatto verso il servizio**, non sui sintomi. Ottica SRE.
-- **Connettori:** Email, Webhook (jolly), Slack, Teams, PagerDuty, Opsgenie, ServiceNow, Jira, SNS…
-- **Chiude il "down" del push:** regola sui **dati mancanti**, tra le prime da impostare, + health di Fleet.
+- **SLO + burn-rate** — Porta l'alerting sul piano delle **pratiche SRE**. Un **SLI è una misura della qualità del servizio** (% di richieste sotto i 300ms).
+  Un **SLO è l'obiettivo** ("il 99,9% delle richieste va servito correttamente"). **L'error budget** è la conseguenza: se punti al 99,9%, ti puoi permettere lo 0,1% di errori.
+  Il **burn-rate** è la velocità con cui consumi quel budget: **un alert burn-rate scatta quando lo stai bruciando troppo in fretta**.
+  Cambio di mentalità: aletti sull'impatto verso l'obiettivo di servizio, non su sintomi tecnici, riducendo il rumore.
+- **Connettori:** Sono i canali attraverso cui le regole comunicano- Email, Webhook (jolly), Slack, Teams, PagerDuty, Opsgenie, ServiceNow, Jira, SNS…
+- Una **strategia di alerting coerente** combina: **soglie** (casi noti e netti), **anomaly detection** (deviazioni contestuali che le soglie non preve‐ dono), **SLO/burn-rate**
+  (focus sull'impatto sul servizio), **connettori** (integrazione nel flusso di on-call).
+  Nel push il "target giù" si rileva con una regola sui **dati mancanti** — tra le prime da impostare — complementare all'health di Fleet.
 
 ---
 
@@ -267,9 +293,10 @@ Motore a **due tempi**: una **regola** valuta una condizione a intervalli; quand
 
 - **OpenTelemetry (OTel)** — standard aperto CNCF per metriche/log/tracce, vendor-neutral. Trasporto: **OTLP** (gRPC/HTTP).
 - **Ingestione OTLP nativa** — l'APM Server / integration APM riceve OTLP: puoi puntare qualsiasi Collector/SDK OTel verso Elastic.
-- **EDOT (Elastic Distribution of OpenTelemetry)** — distribuzione Elastic dei componenti OTel: **EDOT Collector** + **EDOT SDK** (Java, Node.js, Python, .NET, PHP, mobile). Percorso "pronto e supportato". ⚠️ *Stato GA da verificare.*
+- **EDOT (Elastic Distribution of OpenTelemetry)** — distribuzione Elastic dei componenti OTel: **EDOT Collector** + **EDOT SDK** (Java, Node.js, Python, .NET, PHP, mobile). 
 - **Managed OTLP endpoint** (Serverless) — ingresso OTLP gestito, senza APM Server/collector propri.
-- **Elastic come backend OTel** — adotti OTel per la raccolta e usi Elasticsearch/Kibana per storage, correlazione, visualizzazione e alerting. Collante: convergenza **ECS ↔ Semantic Conventions**.
+- **Elastic come backend OTel** — adotti OTel per la raccolta e usi Elasticsearch/Kibana per storage, correlazione, visualizzazione e alerting. Collante: convergenza **ECS ↔
+  Semantic Conventions**.
 - **Collegamento con Flanders** — *Mastering OpenTelemetry and Observability* (Steve Flanders, Wiley 2024) copre OTel dal lato **standard** (produzione e trasporto); questo capitolo copre il lato **backend** (dove i dati atterrano e cosa ci fai).
 
 ---
