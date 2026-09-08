@@ -58,8 +58,8 @@ elastic-lab/
 ├── TEORIA.md            # teoria in 10 capitoli
 ├── docker-compose.yml   # lo stack (segreti via ${VARIABILI} fatte in un secondo momento per migliorare la sicurezza)
 ├── .gitignore           # esclude .env e certs/
-├── .env                 # segreti che non vanno su GitHub
-└── certs/               # certificato TLS che non va su GitHub
+├── .env                 # segreti che non vanno su Git
+└── certs/               # certificato TLS che non va su Git
 ```
 
 > **`.env` e `certs/` non vanno su GitHub** - Contengono password, service token e la chiave privata, li ho esclusi dal `.gitignore`.
@@ -69,6 +69,9 @@ elastic-lab/
 ## Svolgimento passo-passo
 
 ### 0. Preparazione
+Per prima cosa ho creato la cartella di lavoro ho creato una rete Docker `elastic-lab-net` dedicata, dove i container si vedono per nome e così possono comunicare tra loro.
+Ho dovuto generare un certificato self-signed valido per i nomi flette-server e localhost dato che a differenza di Elasticsearch e Kibana, Fleet Server pretende TLS sulla porta 8220.
+Quindi ho generato, tramite il comando openssl rea -x509, il certificato autofirmato e con newkey rsa:2048 -nodes la chiave privata( 2048 bit senza passphrase e -nodes = noDES senza password),creando la cartella certs dove poi sono finiti i file prodotti(fleet-server.crt e fleet-server.key, certificato e chiave) con durata di un anno e altre flag per l'identità del certificato.
 
 ```bash
 mkdir -p elastic-lab && cd elastic-lab
@@ -84,32 +87,97 @@ mkdir -p certs && openssl req -x509 -newkey rsa:2048 -nodes \
 ```
 
 ### 1. File `.env` (segreti)
-
-Crea `.env` con i tuoi valori (la chiave di cifratura ≥ 32 caratteri). Il token si genera al passo 3.
+Prima di costruire il Docker compose con i servizi che mi serviranno, ho configurato il file .env per i segreti (password, token,...) che verranno chiamati con la sintassi ${VARIABILE}, per pubblicare su GitHub il docker-compose.yml in tutta sicurezza.
 
 ```env
-ELASTIC_PASSWORD=cambia_questa_password
-KIBANA_PASSWORD=cambia_questa_password_kibana
+ELASTIC_PASSWORD=password_usata_da_me
+KIBANA_PASSWORD=password_usata_da_me_kibana
 KIBANA_ENCRYPTION_KEY=una_chiave_lunga_almeno_32_caratteri_123456
-FLEET_SERVER_SERVICE_TOKEN=DA_GENERARE_AL_PASSO_3
+FLEET_SERVER_SERVICE_TOKEN=token_generato_poi
 ```
-
-Il `docker-compose.yml` (in questa cartella) legge questi valori tramite `${VARIABILE}`.
-
 ### 2. Avvia lo stack base (senza il Fleet Server)
 
-> Il fleet-server ha bisogno del token, che generiamo dopo. Avviarlo ora darebbe un 401 inutile.
+> Il fleet-server ha bisogno del token, che devo generare dopo dato che non ho le password.
+Ho costruito un unico docker-compose.yml con 4 servizi in catena elasticsearch, kibana_setup, kibana, fleet-server più la rete docker.
+#### Servizio `elasticsearch`
 
+| Riga | Significato |
+|---|---|
+| `image: ...elasticsearch:8.15.0` | Versione **fissa** 8.15.0 (mai `latest`: tutti i componenti devono coincidere). |
+| `container_name: elasticsearch` | Nome del container, usato anche dagli altri servizi per raggiungerlo **per nome** sulla rete. |
+| `networks: [elastic-lab-net]` | Aggancio alla rete Docker privata dove i container si risolvono per nome. |
+| `ports: "9200:9200"` | Espone l'API REST sul Mac (`localhost:9200`). |
+| `discovery.type=single-node` | Singolo nodo per semplificare il lab |
+| `ES_JAVA_OPTS=-Xms1g -Xmx1g` | 1 GB di heap Java (min e max uguali). |
+| `xpack.security.enabled=true` | **Accendo la sicurezza** (password/token). Obbligatorio per Fleet. |
+| `ELASTIC_PASSWORD=${ELASTIC_PASSWORD}` | Password del user `elastic`, letta dal `.env`. |
+| `xpack.security.http.ssl.enabled=false` | **Spegne il TLS** su ES (scelta mia per facilitare il lavoro: autenticazione sì, certificati no). |
+
+**Healthcheck:** insegna a Docker a capire *quando* ES è davvero pronto.
+- Un `curl` autenticato verso `_cluster/health` che aspetta lo stato ≥ `yellow`;
+- `--fail` lo fa fallire su errori HTTP (es. 401);
+- `start_period: 60s` dà 60s di "grazia" iniziale in cui i fallimenti non contano.
+In questo modo gli altri servizi aspettano che ES sia `healthy` prima di partire.
+
+#### Servizio `kibana_setup`
+
+Container **usa-e-getta** che risolve un problema preciso: con la sicurezza attiva, Kibana non può connettersi come `elastic`, deve usare l'utente di sistema **`kibana_system`**, che però nasce senza password.
+
+- Usa l'immagine di **Elasticsearch** (non di Kibana), poi ha anche lui container-name etc...
+- `depends_on: elasticsearch → service_healthy` — Parte solo quando ES è sano.
+- Il `command` fa un `POST` a `_security/user/kibana_system/_password` per impostare la password (dal `.env`), riprovando ogni 5s finché non riesce, poi **termina** (`Exited 0`).
+
+#### Servizio `kibana`
+
+L'interfaccia web. Come elesticsearch ha immagine, nome, network e porte( 5601:5601);
+- `depends_on: kibana_setup → service_completed_successfully`: Parte solo dopo che la password di `kibana_system` esiste.
+- **Catena: ES sano → password → Kibana**.
+- `ELASTICSEARCH_HOSTS/USERNAME/PASSWORD` — Kibana si collega a ES (per nome) autenticandosi come `kibana_system`.
+- Le variabili **`XPACK_FLEET_*`** pre-configurano Fleet all'avvio (senza doverlo fare a mano, e per questo ci metterà un pò all'inizio):
+  - `FLEET_SERVER_HOSTS` — indirizzo del Fleet Server (`https://fleet-server:8220`);
+  - `OUTPUTS` — dove gli agent mandano i dati (`http://elasticsearch:9200`, **il nome, non `localhost`**);
+  - `PACKAGES` — pacchetti da installare (`fleet_server`, `system`);
+  - `AGENT_POLICIES` — pre-crea la policy con id `fleet-server-policy`.
+- `XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY` — chiave di cifratura degli oggetti salvati. **Obbligatoria per l'alerting**.
+
+#### Servizio `fleet-server`
+
+Il "quartier generale" degli agent. Il Fleet Server **è** un Elastic Agent in modalità speciale, quindi usa l'immagine dell'agent(Elastic).
+
+| Riga | Significato |
+|---|---|
+| `image: ...elastic-agent:8.15.0` | Il Fleet Server è un Elastic Agent. |
+| `container_name` | fleet-server |
+| `networks` | elastic-lab-net |
+| `ports: "8220:8220"` | Espone la porta di Fleet. |
+| `volumes: ./certs:/certs:ro` | Monta la cartella dei certificati in sola lettura. |
+| `FLEET_SERVER_ENABLE=true` | Modalità "sono un Fleet Server". |
+| `FLEET_SERVER_ELASTICSEARCH_HOST` | Dove trova ES (per nome). |
+| `FLEET_SERVER_SERVICE_TOKEN` | **Service token** (dal `.env`) per autenticarsi verso ES. |
+| `FLEET_SERVER_POLICY_ID=fleet-server-policy` | La policy da applicare (pre-creata da Kibana). |
+| `FLEET_SERVER_CERT` / `CERT_KEY` | Certificato e chiave TLS (dai file montati). Il Fleet Server **pretende** TLS sulla 8220. |
+| `FLEET_URL=https://fleet-server:8220` | Indirizzo verso cui l'agent fa il check-in (nome per cui il certificato è valido). |
+| `FLEET_CA=/certs/fleet-server.crt` | CA di cui fidarsi per il certificato self-signed. Insieme a `FLEET_URL` risolve l'errore `x509: unknown authority` e porta il Fleet Server a **Healthy**. |
+
+#### La rete
+
+```yaml
+networks:
+  elastic-lab-net:
+    external: true
+```
+
+`external: true` dice al compose di **non creare** una rete nuova, ma di usare quella `elastic-lab-net` creata a mano con `docker network create` (`external` = "esiste già, fuori da questo file").
+
+Per cui non mi è restato che farlo partire, e seguire la catena: elasticsearch diventa healthy (~30-60s) → kibana_setup imposta la password di kibana_system ed esce con Exited (0) → kibana parte(ci vuole un pò di più dato che installerà i pacchetti Fleet).
 ```bash
 docker compose up -d elasticsearch kibana_setup kibana
 
-# attendi ~1-2 min, poi verifica
+# attendo un pò e poi verifico.
 docker compose ps
 # elasticsearch: Up (healthy) · kibana: Up · kibana_setup: Exited (0)
 ```
-
 ### 3. Service token + Fleet Server
-
 ```bash
 # 3.1 genera il token (usa la tua ELASTIC_PASSWORD)
 curl -s -u elastic:LA_TUA_PASSWORD -X POST \
