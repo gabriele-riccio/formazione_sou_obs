@@ -1,5 +1,5 @@
 # Elastic Stack su Docker — Laboratorio metriche
-![seconda_parte](kong/Screenshot%202026-09-02%20alle%2014.39.27.png)
+
 Stack Elastic completo su Docker per raccogliere e visualizzare le **metriche di sistema**: **Elasticsearch + Kibana + Elastic Agent (Fleet)** con sicurezza attiva, TLS sul Fleet Server, viste Inventory/Hosts e una regola di alert sulla CPU.
 
 > **Contesto:** Sourcesense DevOps Academy — Track Observability
@@ -176,19 +176,27 @@ docker compose up -d elasticsearch kibana_setup kibana
 # attendo un pò e poi verifico.
 docker compose ps
 # elasticsearch: Up (healthy) · kibana: Up · kibana_setup: Exited (0)
+# Catena: ES sano → password → Kibana.
 ```
 ### 3. Service token + Fleet Server
+Come detto Fleet ha bisogno di un service token tramite si può autenticare. Per prima cosa lo genero una volta che elasticsearch è healty usando la password di Elastic, poi lo inserisco nel file .env come FLEET_SERVER_SERVICE_TOKEN=AAEA... .
+
 ```bash
 # 3.1 genera il token (usa la tua ELASTIC_PASSWORD)
 curl -s -u elastic:LA_TUA_PASSWORD -X POST \
   "http://localhost:9200/_security/service/elastic/fleet-server/credential/token/token1" \
   -H "Content-Type: application/json"
-# copia il "value" e mettilo nel .env come FLEET_SERVER_SERVICE_TOKEN
+# copio il "value" e lo metto nel .env come FLEET_SERVER_SERVICE_TOKEN
 ```
+**3.2 Crea la policy in Kibana**:
+Poi creo la policy del Fleet Server in Kibana, dato che il fleet server cerca una policy con id fleet-server-policy che ho impostato nel compose.
+La creo dall'interfaccia:
+- Apro `http://localhost:5601` e accedo con utente elastic e la mia password;
+- Vado su Fleet (menu → Management → Fleet, oppure /app/fleet );
+- Tab **Agents** → **Add Fleet Server** → **Quick Start**.
+- Come host imposto https://fleet-server:8220 e premendo continue comparirà "Fleet Server policy created".
 
-**3.2 Crea la policy in Kibana** (`http://localhost:5601` → login `elastic`):
-Fleet → Agents → **Add Fleet Server** → **Quick Start** → host `https://fleet-server:8220` → **Continue**.
-Compare *"Fleet Server policy created"*. **Ignora** i comandi di installazione proposti.
+**3.3 Avvio il Fleet Server**
 
 ```bash
 # 3.3 avvia il Fleet Server
@@ -199,7 +207,9 @@ docker logs --tail 15 fleet-server
 # atteso: "Running on policy with Fleet Server integration: fleet-server-policy" · HEALTHY
 ```
 
-In **Fleet → Agents** il Fleet Server deve comparire **Healthy** (verde).
+In **Fleet → Agents** il Fleet Server deve comparire **Healthy** (verde) da **Updating** (blu).
+![seconda_parte](elastic/Screenshot%202026-09-08%20alle%2012.56.59.png)
+![seconda_parte](elastic/Screenshot%202026-09-08%20alle%2014.57.08.png)
 
 ### 4. Visualizza le metriche
 
