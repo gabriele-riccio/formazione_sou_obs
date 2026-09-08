@@ -1,5 +1,5 @@
 # Elastic Stack su Docker — Laboratorio metriche
-
+![seconda_parte](kong/Screenshot%202026-09-02%20alle%2014.39.27.png)
 Stack Elastic completo su Docker per raccogliere e visualizzare le **metriche di sistema**: **Elasticsearch + Kibana + Elastic Agent (Fleet)** con sicurezza attiva, TLS sul Fleet Server, viste Inventory/Hosts e una regola di alert sulla CPU.
 
 > **Contesto:** Sourcesense DevOps Academy — Track Observability
