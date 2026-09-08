@@ -144,12 +144,11 @@ Ci sono vari tipi di moduli, che poi vanno a raccogliere tipi di metriche divers
 - **`kubernetes`**: E' il più ricco, infatti le metriche arrivano da fonti diverse:
   - `kubelet` (utilizzo reale delle risorse: CPU, memoria);
   - `kube-state-metrics (KSM)` (lo stato degli oggetti Kubernetes: repliche desiderate vs disponibili, fase di un pod);
-  - l'`API server` e altri componenti del control plane.
-  Inoltre le metriche si dividono in due tipologie di famiglie:
-  - metricset di **utilizzo** (dal kubelet): `node`, `pod`, `container`, `volume`, `apiserver`, `scheduler`…
-  - metricset di **stato** (da kube-state-metrics): `state_pod`, `state_deployment`, `state_node`, `state_replicaset`, `state_daemonset`, `state_job`.
+  - l'`API server` e altri componenti del control plane. Inoltre le metriche si dividono in due tipologie di famiglie:
+    - metricset di **utilizzo** (dal kubelet): `node`, `pod`, `container`, `volume`, `apiserver`, `scheduler`…
+    - metricset di **stato** (da kube-state-metrics): `state_pod`, `state_deployment`, `state_node`, `state_replicaset`, `state_daemonset`, `state_job`.
     > *KSM va installato nel cluster.*
-  Distinzione chiave: `pod` ti dice **quanto consuma** un pod (kubectkl); `state_pod` ti dice **in che stato è** (Running, Pending, CrashLoopBackOff; KSM).
+    Distinzione chiave: `pod` ti dice **quanto consuma** un pod (kubectkl); `state_pod` ti dice **in che stato è** (Running, Pending, CrashLoopBackOff; KSM).
 - **Database:** `mysql`, `postgresql`, `redis`, `mongodb`, `mssql`, `oracle` (metricset `status`, `performance`, `replication`…).
 - **Cloud (via API del provider):** AWS (CloudWatch: EC2, S3, RDS, Lambda…), GCP (Cloud Monitoring), Azure (Azure Monitor).
 
