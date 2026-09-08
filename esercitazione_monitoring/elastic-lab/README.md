@@ -259,9 +259,10 @@ Poi ho effettivamente creato la regola:
 - **Condizione:** Aggregation **Average** del campo `system.cpu.total.norm.pct` , **IS ABOVE 0.2** (= 20%, soglia bassa per il lab, di solito in produzione è 0.8-0.9)
 - **Actions:** vuote
 - **Save**
+
 ![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.53.20.png)
-![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.53.21.png)
-![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.55.07.png)
+![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.53.31.png)
+![seconda_parte](elastic/Screenshot%202026-09-04%20alle%2011.55.03.png)
 
 Generando carico CPU con un container busybox `cpu-stress` (in modo di generarlo in maniera controllata) vedrò man mano il carico della CPU (CPU Usare) aumentare nella dashboard:
 
