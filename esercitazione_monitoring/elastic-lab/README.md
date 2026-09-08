@@ -209,7 +209,7 @@ docker logs --tail 15 fleet-server
 
 In **Fleet → Agents** il Fleet Server deve comparire **Healthy** (verde) da **Updating** (blu).
 ![seconda_parte](elastic/Screenshot%202026-09-08%20alle%2012.56.59.png)
-![seconda_parte](elastic/Screenshot%202026-09-08%20alle%2014.57.08.png)
+![seconda_parte](elastic/Screenshot%202026-09-08%20alle%2012.57.08.png)
 
 ### 4. Visualizza le metriche
 
