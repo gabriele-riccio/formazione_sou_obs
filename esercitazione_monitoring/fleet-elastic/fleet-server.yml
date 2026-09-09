@@ -1,0 +1,71 @@
+# Deployment: il pod del Fleet Server
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fleet-server
+  namespace: elastic-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fleet-server
+  template:
+    metadata:
+      labels:
+        app: fleet-server
+    spec:
+      serviceAccountName: elastic-agent
+      containers:
+        - name: fleet-server
+          image: docker.elastic.co/elastic-agent/elastic-agent:8.15.0
+          ports:
+            - containerPort: 8220
+          env:
+            - name: FLEET_SERVER_ENABLE
+              value: "true"
+            - name: FLEET_SERVER_ELASTICSEARCH_HOST
+              value: "http://192.168.65.254:9200"
+            - name: FLEET_SERVER_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: fleet-server-token
+                  key: FLEET_SERVER_SERVICE_TOKEN
+            - name: FLEET_SERVER_POLICY_ID
+              value: "fleet-server-policy"
+            - name: FLEET_SERVER_CERT
+              value: "/certs/fleet-server.crt"
+            - name: FLEET_SERVER_CERT_KEY
+              value: "/certs/fleet-server.key"
+            - name: FLEET_URL
+              value: "https://fleet-server.elastic-system.svc:8220"
+            - name: FLEET_CA
+              value: "/certs/fleet-server.crt"
+            - name: FLEET_SERVER_PORT
+              value: "8220"
+            - name: ELASTICSEARCH_HOST
+              value: "http://192.168.65.254:9200"
+            - name: ELASTICSEARCH_USERNAME
+              value: "elastic"
+            - name: ELASTICSEARCH_PASSWORD
+              value: "admin123"
+          volumeMounts:
+            - name: certs
+              mountPath: /certs
+              readOnly: true
+      volumes:
+        - name: certs
+          secret:
+            secretName: fleet-server-cert
+---
+# Service: rende il Fleet Server raggiungibile nel cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: fleet-server
+  namespace: elastic-system
+spec:
+  selector:
+    app: fleet-server
+  ports:
+    - port: 8220
+      targetPort: 8220
