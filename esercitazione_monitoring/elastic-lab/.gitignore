@@ -1,8 +1,12 @@
-# Segreti - non committare mai
+# Segreti - MAI su Git
 .env
-
-# Certificati e chiavi private
+nginx/nginx.conf
 certs/
+copia_template.py
+copia_fleet_pipeline.py
 
-# File di stato eventuali
-*.log
+# Backup e stato Docker/Vagrant
+*.bak
+*.bak2
+*.bak3
+.vagrant/

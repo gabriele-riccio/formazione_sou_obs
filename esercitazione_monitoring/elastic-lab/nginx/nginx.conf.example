@@ -1,0 +1,37 @@
+events {
+    worker_connections 1024;
+}
+
+http {
+    client_max_body_size 100m;
+
+    server {
+        listen 9200;
+        resolver 127.0.0.11 valid=10s;
+
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_connect_timeout 75s;
+
+        # Ramo primario: cluster 1 (la risposta torna all'agent)
+        location / {
+            mirror /mirror;
+            mirror_request_body on;
+
+            set $primary "http://elasticsearch:9200";
+            proxy_pass $primary;
+            proxy_set_header Host $host;
+            proxy_http_version 1.1;
+        }
+
+        # Ramo mirror: cluster 2 (copia best-effort, auth iniettata)
+        location = /mirror {
+            internal;
+            set $secondary "http://elasticsearch2:9200";
+            proxy_pass $secondary$request_uri;
+            proxy_set_header Host $host;
+            proxy_set_header Authorization "Basic <BASE64_DI_elastic:PASSWORD>";
+            proxy_http_version 1.1;
+        }
+    }
+}
