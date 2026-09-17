@@ -1,0 +1,56 @@
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu/jammy64"
+  config.vm.hostname = "haproxy-fleet-proxy"
+
+  config.vm.network "private_network", ip: "192.168.56.50"
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = "1024"
+    vb.cpus = 1
+  end
+
+  # Copia i file di config dentro la VM
+  config.vm.provision "file", source: "haproxy.cfg", destination: "/tmp/haproxy.cfg"
+  config.vm.provision "file", source: "mirror.lua", destination: "/tmp/mirror.lua"
+  config.vm.provision "file", source: "http.lua", destination: "/tmp/http.lua"
+
+  config.vm.provision "shell", inline: <<-SHELL
+    set -e
+    apt-get update
+    apt-get install -y haproxy openssl
+
+    # Modulo HTTP per Lua: prova apt, altrimenti luarocks
+    if apt-get install -y lua-http; then
+      echo "=== lua-http installato via apt ==="
+    else
+      echo "=== lua-http non in apt, uso luarocks ==="
+      apt-get install -y luarocks lua5.3 liblua5.3-dev gcc make
+      luarocks install http
+    fi
+
+    # Cartella certificati per HAProxy
+    mkdir -p /etc/haproxy/certs
+
+    # Genera il certificato self-signed per il frontend Fleet (8220)
+    openssl req -x509 -newkey rsa:2048 -nodes \
+      -keyout /tmp/haproxy.key -out /tmp/haproxy.crt \
+      -days 365 -subj "/CN=haproxy-fleet-proxy"
+    cat /tmp/haproxy.crt /tmp/haproxy.key > /etc/haproxy/certs/haproxy.pem
+    chmod 600 /etc/haproxy/certs/haproxy.pem
+
+    # Installa la config e lo script Lua
+    cp /tmp/haproxy.cfg /etc/haproxy/haproxy.cfg
+    cp /tmp/mirror.lua /etc/haproxy/mirror.lua
+    cp /tmp/http.lua /etc/haproxy/http.lua
+
+    # Valida la config; riavvia solo se valida
+    if haproxy -c -f /etc/haproxy/haproxy.cfg; then
+      systemctl restart haproxy
+      systemctl enable haproxy
+      echo "=== HAProxy avviato correttamente ==="
+    else
+      echo "!!! ERRORE nella config HAProxy: NON riavviato !!!"
+      exit 1
+    fi
+  SHELL
+end
