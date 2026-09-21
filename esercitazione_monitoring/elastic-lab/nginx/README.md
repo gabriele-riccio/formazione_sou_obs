@@ -124,19 +124,21 @@ Ho aggiunto poi il servizio NGINX sempre nel compose, esso è il componente che 
 
 ## Passo 3 — Configurazione NGINX (mirror)
 
-Creare la cartella per la configurazione:
+Creo la cartella per la configurazione:
 
 ```bash
 mkdir -p nginx
 ```
-Creare `nginx/nginx.conf`. Il valore `AUTH_B64` è l'autenticazione Basic del cluster
-secondario, iniettata esplicitamente sul ramo mirror (vedi nota più sotto).
+Una volta creata la cartella ci inserisco il file di configurazione `nginx.conf`:
+> Ho bisogno dell'autenticazione per effettuare il mirroring, per cui ho bisogno della password ed ho deciso di utilizzare quella di elastic per semplicità.
+> Per l'L'HTTP Basic Authentication, va fatto in base64 quindi ho prima recuperato la password dall' `.env` e l'ho salvata nella variabile `PASS`, dopodiché ho costruito una nuova variabile
+> `AUTH_B64` prendendo il valore precedentemente salvato iniettandolo poi esplicitamente sul ramo mirror del `nginx.conf`(anche se per semplicità nel file l'ho lasciato esplicito).
 
 ```bash
 PASS=$(grep '^ELASTIC_PASSWORD=' .env | cut -d= -f2-)
 AUTH_B64=$(printf "elastic:%s" "$PASS" | base64)
+# Salvo il risultato ottenuto e lo inserisco sul ramo mirror  dell'autenticazione `Basic ${AUTH_B64}`.
 
-cat > nginx/nginx.conf << EOF
 events {
     worker_connections 1024;
 }
@@ -169,28 +171,45 @@ http {
             set \$secondary "http://elasticsearch2:9200";
             proxy_pass \$secondary\$request_uri;
             proxy_set_header Host \$host;
-            proxy_set_header Authorization "Basic ${AUTH_B64}";
+            proxy_set_header Authorization "Basic ZWxXXXXXXXXXX";
             proxy_http_version 1.1;
         }
     }
 }
-EOF
 ```
 
-Punti chiave della configurazione:
+### Punti chiave:
 
-- **`resolver 127.0.0.11`**: quando `proxy_pass` usa una variabile, NGINX risolve il nome a
-  runtime. Serve il DNS interno di Docker, altrimenti il ramo mirror fallisce con
-  `could not be resolved`.
-- **`mirror` + `mirror_request_body on`**: duplica la richiesta *e* il suo corpo verso la
-  location interna `/mirror`.
-- **`proxy_read_timeout 300s`**: il Fleet Server fa richieste in long-polling (fino a 4
-  minuti). Senza timeout ampi, NGINX le interrompe con `504`.
-- **`Authorization "Basic ..."` sul mirror**: l'autenticazione dell'agent non si propaga
-  automaticamente alla subrequest del mirror. Va iniettata esplicitamente, altrimenti il
-  cluster 2 rifiuta tutto con `401` (silenziosamente, perché il mirror è muto).
+- Blocco **events** e **http**: Events è obbligatorio in NGINX (configura la gestione delle connessioni), ed ho inserito poi come limite del corpo delle richieste a 100MB dato che le bulk
+  delle metriche possono essere grandi e lasciando il default a 1 MB verrebbero rifiutate;
+- Blocco del **server**:
+  - `listen:9200` dove ascolta NGINX da dentro il container;
+  - `resolver 127.0.0.11` è il **DNS interno di Docker** che serve perché il `proxy_pass` usa i nomi dei servizi (elasticsearch, elasticsearch2) che devono essere risolti a runtime da
+    NGINX - Se non ci fosse il ramo mirror fallirebbe con `could not be resolved`;
+  - I tre timeout coprono le richieste in long-polling del Fleet Server (che aspettano fino a 4 minuti);
+- Ramo primario **location /**:
+  Qui arriva tutto il traffico dall'agent, fa due cose:
+  - `mirror /mirror + mirror_request_body on ` - dice a NGINX "duplica questa richiesta, corpo incluso, verso la location interna /mirror";
+  - `proxy_pass $primary (http://elasticsearch:9200)` - inoltra la richiesta "vera" al cluster 1, la cui risposta torna all'agent, una volta settanta la variabile
+    `$primary`(http://elasticsearch:9200);
 
-Avviare NGINX e verificare che parta pulito:
+  - `proxy_set_header Host $host` passa l'header Host originale; `proxy_http_version 1.1` usa HTTP/1.1 (necessario per keep-alive e per come l'agent parla);
+  > Dettaglio: qui il nome l'ho messo in una variabile (set $primary ...) invece che diretto.
+  > Quando proxy_pass usa una variabile, NGINX risolve il nome a runtime tramite il resolver per questo il resolver è obbligatorio in questa versione.
+
+- Ramo mirror **location = /mirror**:
+  Questa è la copia verso il cluster 2:
+  - `internal` significa che la location non è raggiungibile dall'esterno e solo NGINX la usa internamente per il mirror;
+  - `proxy_pass $secondary$request_uri` inoltra a elasticsearch2 preservando l'URL originale, così da far arrivare le metriche identiche;
+  - La riga chiave è `proxy_set_header Authorization "Basic ZWxXXXXXXXXXX"` che inietta l'autenticazione verso il cluster 2 , altrimenti il
+    cluster 2 rifiuta tutto con `401` (silenziosamente, perché il mirror è muto).
+
+#### In sintesi
+Riceve una richiesta → la manda al cluster 1 (risposta all'agent) → e in copia, con auth iniettata, al cluster 2.
+> Il ramo mirror è best-effort: NGINX non aspetta la risposta del cluster 2.
+
+
+## Passo 4 — Avviare NGINX e verificare che parta pulito:
 
 ```bash
 docker compose up -d nginx
@@ -204,8 +223,6 @@ export ELASTIC_PASSWORD=$(grep '^ELASTIC_PASSWORD=' .env | cut -d= -f2-)
 curl -s -u "elastic:${ELASTIC_PASSWORD}" "http://localhost:9210/" | head
 # atteso: JSON di benvenuto di Elasticsearch
 ```
-
-<!-- IMMAGINE: log NGINX all'avvio -->
 
 ---
 
@@ -336,29 +353,3 @@ Lato Kibana (cluster 1), il monitoraggio è visibile in
 <!-- IMMAGINE: log NGINX con righe "_bulk ... 200" o "uri=/mirror | status=200" -->
 
 ---
-
-## Note e limitazioni
-
-- **Autenticazione sul mirror**: l'header `Authorization` va iniettato a mano perché non si
-  propaga alla subrequest. Nel lab funziona con le stesse credenziali su entrambi i cluster;
-  in produzione con password diverse si userebbero qui le credenziali del cluster 2.
-- **Best-effort**: il ramo mirror non garantisce la consegna. Se il cluster 2 è lento o giù,
-  le copie si perdono senza che l'agent se ne accorga. Accettabile per un backup interno.
-- **Provisioning del cluster ricevente**: qualunque scrittura verso data stream Fleet richiede
-  template e pipeline già presenti sul cluster di destinazione.
-- **Segreti**: `nginx.conf` contiene l'auth in base64 → escluderlo da Git (`.gitignore`) e
-  versionare una versione `nginx.conf.example` con placeholder.
-- **Lab vs produzione**: qui NGINX è containerizzato per semplicità; in produzione starebbe
-  su una VM/pod dedicato come componente di infrastruttura condiviso.
-
----
-
-## Pulizia (opzionale)
-
-Rimozione di eventuali indici di test creati durante le verifiche:
-
-```bash
-export ELASTIC_PASSWORD=$(grep '^ELASTIC_PASSWORD=' .env | cut -d= -f2-)
-curl -s -u "elastic:${ELASTIC_PASSWORD}" -X DELETE "http://localhost:9200/test-*"
-curl -s -u "elastic:${ELASTIC_PASSWORD}" -X DELETE "http://localhost:9201/test-*"
-```
