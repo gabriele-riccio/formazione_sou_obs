@@ -434,7 +434,7 @@ Atteso: righe `POST /_bulk...` con codice **200** e user-agent `Elastic-metricbe
 
 In **Kibana → Observability → Infrastructure → Inventory/Hosts**:
 
-![seconda_parte](nginx/Screenshot%202026-09-21%20alle%2012.31.38.png)
+![seconda_parte](nginx/Screenshot%202026-09-21%20alle%2012.32.38.png)
 ![seconda_parte](nginx/Screenshot%202026-09-21%20alle%2012.33.13.png)
 ![seconda_parte](nginx/Screenshot%202026-09-21%20alle%2012.33.27.png)
 ![seconda_parte](nginx/Screenshot%202026-09-21%20alle%2012.33.35.png)
