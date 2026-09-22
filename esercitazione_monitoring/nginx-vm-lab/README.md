@@ -131,7 +131,7 @@ docker compose ps      # elasticsearch ed elasticsearch2 devono essere (healthy)
 
 ## Passo 2 — La configurazione NGINX
 
-Ho bisogno dell'autenticazione per effettuare il mirroring, per cui ho bisogno della password ed ho deciso di utilizzare quella di elastic per semplicità.Per l'HTTP Basic Authentication, va fatto in base64 quindi ho prima recuperato la password dall'``.env` e l'ho salvata nella variabile `PASS`, dopodiché ho costruito una nuova variabile `AUTH_B64` prendendo il valore precedentemente salvato, iniettandolo poi esplicitamente sul ramo mirror del `nginx.conf` (anche se per semplicità nel file l'ho lasciato esplicito):
+Ho bisogno dell'autenticazione per effettuare il mirroring, per cui ho bisogno della password ed ho deciso di utilizzare quella di elastic per semplicità.Per l'HTTP Basic Authentication, va fatto in base64 quindi ho prima recuperato la password dall' `.env` e l'ho salvata nella variabile `PASS`, dopodiché ho costruito una nuova variabile `AUTH_B64` prendendo il valore precedentemente salvato, iniettandolo poi esplicitamente sul ramo `mirror` del `nginx.conf` (anche se per semplicità nel file l'ho lasciato esplicito):
 
 ```bash
 PASS=$(grep '^ELASTIC_PASSWORD=' .env | cut -d= -f2-)
