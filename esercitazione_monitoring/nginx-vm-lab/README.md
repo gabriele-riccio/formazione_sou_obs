@@ -238,6 +238,8 @@ curl -s -u "elastic:${ELASTIC_PASSWORD}" "http://localhost:9201/test-nginx-vm/_c
 
 Entrambi devono dare `"count":1` → il mirror duplica correttamente.
 
+<immagine>
+
 ## Passo 6 — Provisioning del cluster ricevente
 
 Il cluster 2, non gestito da Fleet, ha bisogno dei **template** e delle **ingest pipeline**
@@ -262,6 +264,7 @@ python3 copia_fleet_pipeline.py
 
 > Gli ES del lab non hanno volume dati persistente: dopo un `compose down` il cluster 2
 > riparte pulito e i template vanno ricopiati.
+<immagine>
 
 ## Passo 7 — Puntare l'agent a NGINX
 
@@ -271,13 +274,13 @@ Verifica che il container dell'agent raggiunga la VM:
 docker exec fleet-server curl -s -u "elastic:password" \
   "http://192.168.56.51:9210/" -o /dev/null -w "%{http_code}\n"   # atteso: 200
 ```
-
+<immagine>
 Poi in **Kibana → Fleet → Settings → Outputs**, modifica l'output `default` (tipo
 Elasticsearch) e imposta come host `http://192.168.56.51:9210`. Salva.
 
 > Un solo proxy alla volta deve ricevere l'output dell'agent: se c'era un'altra VM proxy
 > (es. HAProxy), il traffico ora va a NGINX.
-
+<immagine>
 ## Passo 8 — Verifica del fan-out
 
 ```bash
@@ -286,7 +289,7 @@ curl -s -u "elastic:${ELASTIC_PASSWORD}" "http://localhost:9201/metrics-system.c
 sleep 120
 curl -s -u "elastic:${ELASTIC_PASSWORD}" "http://localhost:9201/metrics-system.cpu-default/_count"
 ```
-
+<immagine>
 Il secondo conteggio deve essere **più alto** del primo → le metriche `system` arrivano al
 cluster 2 attraverso NGINX.
 
@@ -299,6 +302,7 @@ vagrant ssh -c "sudo tail -20 /var/log/nginx/access.log | grep _bulk | tail -5"
 Atteso: righe `POST /_bulk...` con codice **200** e user-agent `Elastic-metricbeat` /
 `Elastic-filebeat` / `Elastic-Fleet-Server`.
 
+<immagine>
 ---
 
 ## Note e limitazioni
@@ -328,5 +332,3 @@ Conclusione: per il fan-out puro, **NGINX con `mirror` nativo** è la via più s
 HAProxy resta valido ma richiede più lavoro (Lua) per ottenere lo stesso risultato.
 
 ---
-
-*Lab della DevOps Academy — Elastic Stack 8.15.0 + NGINX 1.18 su VM. Repo: `formazione_sou_obs`.*
