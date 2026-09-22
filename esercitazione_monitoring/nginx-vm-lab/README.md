@@ -238,7 +238,7 @@ curl -s -u "elastic:${ELASTIC_PASSWORD}" "http://localhost:9201/test-nginx-vm/_c
 
 Entrambi devono dare `"count":1` → il mirror duplica correttamente.
 
-<immagine>
+![seconda_parte](haproxy/Screenshot%202026-09-01%20alle%2012.36.37.png)
 
 ## Passo 6 — Provisioning del cluster ricevente
 
