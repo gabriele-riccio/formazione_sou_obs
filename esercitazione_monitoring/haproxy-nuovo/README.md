@@ -357,11 +357,9 @@ return http
 - Infine definisco 2 funzioni pubbliche `http.get` e `http.post` come scorciatoie su `do_request`, e restituisco il modulo. Sono esattamente quelle che mirror.lua chiama con `http.get{...}` e
   `http.post{...}`.
   
-## Passo 5 — La configurazione HAProxy
+## Passo 5 — La configurazione HAProxy `haproxy.cfg`
 
-`haproxy.cfg` con i due frontend. Punti chiave: `lua-load` dello script, `tune.bufsize`
-alzato (le bulk delle metriche superano il buffer di default da 16 KB), `wait-for-body` per
-avere il body completo prima del Lua, e il richiamo `http-request lua.mirror_to_b`.
+Il file `haproxy.cfg`:
 
 ```
 global
@@ -415,11 +413,32 @@ backend elasticsearch_a_real
     mode http
     server es1 192.168.56.1:9200
 ```
-
-> Il file deve terminare con un **newline finale**, altrimenti HAProxy dà
-> `Missing LF on last line`.
+### Punti chiave.
+- Sezione **global**:
+  - La riga cruciale è `tune.bufsize 1000000` che alza il buffer interno di HAProxy a circa 1MB. Il default è 16 KB, ma le bulk delle metriche sono più grandi, senza questo il body verrebbe
+    troncato e il Lua non vedrebbe la richiesta completa;
+  - Il pezzo `lua-pretend-path` dice a Lua dove cercare i file da `require`(il ? viene sostituito dal nome, quindi `require(`http`)` trova `/etc/haproxy/mirror.lua`;
+  - `lua-load` carica `mirror.lua` all'avvio, questo è ciò che registra l'azione `mirror_to_b`;
+- Sezione **default**:
+  - `mode http` - HAProxy lavora a livello HTTP (non TCP puro), necessario per leggere header e body;
+  - I due **timeout** a 310 secondi sono volutamente generosi dato che le connessioni agent/fleet possono restare aperte a lungo;
+- **Frontend Fleet Server (canale di management, con TLS)**:
+  - `frontend fleet_proxy_in...` ascolta sulla porta 8220 (del fleet server) in TLS, usando il certificato `haproxy.pem`(l'agent così parla con HAProxy in HTTPS);
+  - `option http-buffer-request... 1s`:
+    - `http-buffer-request` bufferizza la richiesta completa prima di processarla;
+    - `wait-for-body time 1s` aspetta fino a 1 secondo di avere il body completo prima di eseguire il Lua (senza questo il mirror potrebbe partire con un body incompleto);
+  - `http-request lua.mirror_to_b... fleet server_real` - Esegue l'azione Lua `mirror_to_b` (**spedisce la copia al cluster 2**) e poi manda la richiesta originale al backend
+    reale(`default_backend`);
+  - `backend fleet_server_real...ssl verify nome`:
+    - **Backend vero** Il fleet server su 192.168.56:8220;
+    - `ssl verify none` Disabilità la verifica del certificato (come è fatto anche sul server del cliente).
+- **Frontend Dati/Metriche (Elasticsearch)**
+  - Stessa identica logica di prima (`fontend es_data_in...http-request lua.mirror_to_b default_backend elasticsearch_a_real... backend elasticsearch_a_real`) ma sulla porta 9210 (elastic)
+    senza TLS: riceve le metriche, ne fa il mirror al cluster 2 con Lua e le manda al cluster 1 reale (192.168.56.1:9200). Questo è sul canale che duplica davvero le metriche.
+> Il file deve terminare con un **newline finale**, altrimenti HAProxy dà `Missing LF on last line`, pretende che finisca con un a-capo altrimenti non parte.
 
 ## Passo 6 — Provisioning della VM
+Dopo aver fatto tutti gli altri file possiamo fare il provisioning della VM:
 
 ```bash
 cd haproxy-nuovo
@@ -438,7 +457,7 @@ cluster 1: **component template**, **index template**, **ingest pipeline** — i
 `.fleet_*` (in particolare **`.fleet_final_pipeline-1`**, richiesta da ogni data stream Fleet).
 
 (Nel lab la copia è stata fatta con due script Python via API — `copia_template.py` e
-`copia_fleet_pipeline.py`.)
+`copia_fleet_pipeline.py` che ho già spiegato nei lab precedenti come NGINX.)
 
 ## Passo 8 — Puntare l'agent a HAProxy
 
@@ -452,8 +471,10 @@ docker exec fleet-server curl -s -u "elastic:password" \
 Poi in **Kibana → Fleet → Settings → Outputs**, modifica l'output `default` (tipo
 Elasticsearch) e imposta come host `http://192.168.56.50:9210`. Salva.
 
-> Se il Fleet Server resta bloccato su un vecchio output non più raggiungibile, ricrearlo:
-> `docker compose up -d --force-recreate fleet-server`.
+> Nota: Se il Fleet Server resta bloccato su un vecchio output non più raggiungibile, ricrearlo:
+```bash
+docker compose up -d --force-recreate fleet-server
+```
 
 ## Passo 9 — Verifica del fan-out
 
@@ -471,23 +492,6 @@ cluster, e il log del mirror riporta `status 200`.
 
 ---
 
-## Problemi incontrati e soluzioni
-
-| Problema | Sintomo | Soluzione |
-|---|---|---|
-| Modulo Lua HTTP | `module 'http' not found` | `lua-http` di apt ha un'API diversa; scritta una libreria minimale (`http.lua`) su `core.tcp` |
-| API non disponibile | `attempt to call a nil value (field 'httpclient')` | `core.httpclient` non esiste in HAProxy 2.4 (dalla 2.5); usato `core.tcp` |
-| Newline finale | `Missing LF on last line` | aggiungere una riga vuota in fondo a `haproxy.cfg` |
-| Body troncato | bulk grandi non passavano | `tune.bufsize 1000000` nel blocco `global` |
-| Stallo Fleet Server | log ripetuti `lookup <host> no such host` | l'output puntava a un proxy non più esistente; `--force-recreate` del Fleet Server |
-| **Bulk rifiutate (gzip)** | mirror `status 400`, *Illegal character (CTRL-CHAR, code 31)* | le metriche viaggiano **gzip**: inoltrare l'header **`Content-Encoding`** nella copia |
-| Autenticazione | mirror `status 401` | iniettare esplicitamente `Authorization: Basic <base64>` verso il cluster 2 |
-| Template mancanti | *specifies a missing component template* / data stream non creati | copiare component/index template + ingest pipeline (incluse `.fleet_*`) sul cluster 2 |
-
-Il carattere `code 31` (`\x1F`) nell'errore 400 è la firma del **gzip**: il cluster 2 riceveva
-byte compressi senza sapere che lo fossero, e li leggeva come JSON non valido. Inoltrando
-`Content-Encoding: gzip` il problema si risolve.
-
 ## Note e limitazioni
 
 - **Best-effort**: il ramo di copia è asincrono e non garantisce la consegna. Se il cluster 2
@@ -500,17 +504,6 @@ byte compressi senza sapere che lo fossero, e li leggeva come JSON non valido. I
 - **HAProxy non nasce per duplicare**: il load-balancing manda a *uno* dei backend; la
   duplicazione qui è ottenuta via Lua. Per un fan-out "industriale" di scritture esistono
   strumenti nati per questo (Logstash, Vector).
-
-## Differenze lab / produzione
-
-- Nel lab i due cluster condividono la **stessa password**; in produzione l'auth iniettata nel
-  mirror userebbe le credenziali del cluster 2.
-- In produzione HAProxy starebbe su una **VM/pod dedicato**, non containerizzato al volo, come
-  componente di infrastruttura condiviso.
-- La licenza cambia le opzioni: con **Enterprise** il fan-out "un agent, due output" è nativo
-  in Fleet e non servirebbe alcun proxy; su **Basic/Platinum** servono NGINX/HAProxy oppure
-  Logstash (con policy separata dal Fleet Server).
-
 ---
 
 
