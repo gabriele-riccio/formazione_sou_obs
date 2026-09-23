@@ -21,7 +21,7 @@ Ambiente: **Elastic Stack 8.15.0** (in Docker) + **HAProxy 2.4** (su VM Vagrant/
 - [Passo 5 — La configurazione HAProxy](#passo-5--la-configurazione-haproxy)
 - [Passo 6 — Provisioning della VM](#passo-6--provisioning-della-vm)
 - [Passo 7 — Provisioning del cluster ricevente](#passo-7--provisioning-del-cluster-ricevente)
-- [Passo 8 — Puntare l'agent a HAProxy](#passo-8--puntare-lagent-a-haproxy)
+- [Passo 8 — Puntare l'agent ad HAProxy](#passo-8--puntare-lagent-adH-haproxy)
 - [Passo 9 — Verifica del fan-out](#passo-9--verifica-del-fan-out)
 - [Problemi incontrati e soluzioni](#problemi-incontrati-e-soluzioni)
 - [Note e limitazioni](#note-e-limitazioni)
@@ -37,7 +37,7 @@ cluster Elasticsearch** indipendenti (principale + interno), così da averne una
 sotto il proprio controllo.
 
 La regola è "**un agent, due output**". Le vie native hanno dei vincoli (vedi sotto),
-quindi la duplicazione viene fatta **fuori dall'agent**, da HAProxy.
+quindi la duplicazione viene fatta **fuori dall'agent**, attraverso un reverse come HAProxy.
 
 ## Architettura
 
@@ -108,9 +108,33 @@ Il secondo cluster è un nodo `single-node` isolato dal primo:
       - xpack.security.http.ssl.enabled=false
 ```
 
+### Punti chiave:
+- Ho usato la stessa versione dell'immagine del primo per non avere disallineamenti e l'ho connesso alla stessa rete degli altri servizi
+  `elastic-lab-net`;
+- Ho mappato la porta 9200 con cui ES ascolta da dentro Docker, esponendolo sulla 9201 sull'host (essendo la 9200 occupato dal primo
+  Elasticsearch);
+- Ho aggiunto le `env` di configurazione:
+  - `discovery.type=single-node`: Essa dice al nodo "sei un cluster da solo, non cercare altri nodi con cui federarti". Per farlo restare separato dal primo ES.
+  - `ES_JAVA_OPTS=-Xms1g -Xmx1g`: Assegno 1 GB di heap Java.
+  - `xpack.security.enabled=true`: Con esso attivo la sicurezza (password, autenticazione).
+  - `ELASTIC_PASSWORD=${ELASTIC_PASSWORD}`: Imposto la password dell'utente elastic, presa dal file .env.
+  - `xpack.security.http.ssl.enabled=false`: HTTP in chiaro sulla 9200 (niente TLS), coerente con quello fatto su.
+    > Per comodità ho usato la stessa password in produzione ovviamente non sarà così e ci sarà un tipo di sicurezza diversa anche per l'HTTP in chiaro.
+- Ho aggiunto infine il blocco `healthcheck`; Esso dice a Docker come capire se il nodo è sano:
+  - Ogni 10 secondi (`interval`) esegue un `curl` all'endpoint di health del cluster (Se risponde entro i tempi è healthy);
+  - `start_period:60s` gli dò un minuto di grazia all'avvio (ES lento a partire) prima di considerare i fallimenti.Serve perché altri servizi possono aspettare che sia healthy prima di
+    avviarsi.
+    
+Avvio lo stack (non serve per far partire la VM, ma serve per i test):
+
+```bash
+cd elastic-lab
+docker compose up -d
+docker compose ps      # elasticsearch ed elasticsearch2 devono essere (healthy)
+```
 ## Passo 2 — La VM HAProxy
 
-`Vagrantfile` — box Ubuntu, IP privato fisso, e provisioning che installa HAProxy, genera il
+`Vagrantfile`: Box Ubuntu, IP privato fisso, e provisioning che installa HAProxy, genera il
 certificato per il frontend Fleet e copia i file di config:
 
 ```ruby
@@ -155,12 +179,31 @@ Vagrant.configure("2") do |config|
   SHELL
 end
 ```
-
-> `haproxy -c` valida la config **prima** del riavvio: se c'è un errore di sintassi il
-> provisioning si ferma con un messaggio chiaro invece di lasciare HAProxy in stato incerto.
-
+### Punti chiave:
+- **config** - E' l'oggetto su cui imposto tutto (box,hostname, rete privata con IP fisso `192.168.56.50` con cui raggiungiamo HAProxy dall'host;
+- **config.vm.provider** - VirtualBox come provider dove decido le risorse (memoria Ram e CPU);
+- Copia dei file di config (**provisioning file**) - Copio i tre file (haproxy.cfg, mirror.lua e http.lua) dalla cartella host dentro la VM, nella cartella dei file temporanei `/tmp`:
+  - **source** = il file sul mio PC;
+  - **destination** = dove finiscono nella VM;
+  - Li metto in `/tmp` come "area di transito" e  poi lo script shell li sposterà al posto giusto;
+- Script di installazione (**provisioning shell**) - Avvio un blocco di comandi shell eseguiti come root dentro la VM al primo avvio:
+  - `set -e`- fa fermare lo script al primo avvio;
+  - `apt-get update/install -y haproxy openssl` - Aggiorno l'elenco dei pacchetti e installo HAProxy e openssl(per il certificato);
+- Generazione del certificato **TLS** - Creo la cartella dei certificati e genero un certificato self-signed (autofirmato) con openssl:
+  - `-x509` : Certificato completo;
+  - `-newkey rsa:2048` : Genero una chiave RSA da 2048 bit;
+  - `-nodes` : No password sulla chiave (così HAProxy parte senza chiederla);
+  - `-keyout/-out` : Dove viene salvato il certificato `/tmp/haproxy.key` e `/tmp/haproxy.crt`;
+  - `-days 365` : Validità un anno;
+  - `-subj "/CN=..."` : Il campo Common Name viene riempito senza domande interattive;
+  > Serve perché il frontend Fleet (porta 8220) parla in TLS, quindi HAProxy ha bisogno di un certificato da presentare.
+  > Inoltre uso il cat per concatenare i due file in un unico, `/etc/haproxy/certs/haproxy.pem` perchè HAProxy vuole certificato e chiave in un unico file `.pem`.
+  > Permessi con `chmod 600` così che solo il proprietario può leggerlo.
+  Con `cp /tmp/nome_file /etc/haproxy/nome_file` sposto i tre file dalla cartella di quelli temporanei nella loro posizione definitiva.
+- Validazione + avvio: Script che ho usato anche con la procedura nginx, con haproxy -c -f valida la config prima del riavvio e se c'è un errore di sintassi il provisioning si ferma con un
+  messaggio chiaro.
+  
 ## Passo 3 — Lo script Lua di mirroring
-
 `mirror.lua` registra un'azione (`mirror_to_b`) che scatta su ogni richiesta HTTP. Legge
 metodo, path, query, body e header; poi, in un **task asincrono** (`core.register_task`),
 spedisce una **copia** al cluster 2. L'asincronia rende il mirror *best-effort*: HAProxy non
@@ -210,10 +253,34 @@ core.register_action("mirror_to_b", {"http-req"}, function(txn)
     end)
 end)
 ```
-
-> `<BASE64_elastic:password>` si genera con `printf "elastic:password" | base64`.
-> Contiene una credenziale: va escluso da Git (versionare un `mirror.lua.example`).
-
+### Punti chiave:
+- Prima cosa carico la libreria HTTP personalizzata dato che HAProxy 2.4 non ha un client HTTP nativo utilizzabile;
+- Poi attraverso il comando `core.register_action("")` registro un'azione chiamata `mirror_to_b` agganciata alla fase `http-req` (ovvero quando arriva una richiesta http). La funzione riceve
+  `txn`(transazione corrente - richiesta in corso):
+  - **method()** -> verbo HTTP (GET,POST..);
+  - **path()** -> percorso (es /_bulk);
+  - **query()** -> la query string dopo il ? (es. ?refresh=true).
+  > `txn.sf` sono le **fetch methods**, funzioni che estraggono pezzi della richiesta.
+- Ci sono poi altre funzioni dichiarate:
+  - `local full_path = path`... - Ricostruisce il percorso completo, se c'è una query la riattacca con ?;
+  > .. in Lua è la concatenazione di stringhe e serve perché copiando la richiesta devo replicare anche i parametri.
+  - `local body = ten.sf:req_body()` - Prende il corpo della richiesta (i dati);
+  - `local content_type = txn.sf:req_hdr("content-type") or "application/json"` - Legge l'header Content-Type. Il or "application/json" è un valore di default, se l'header manca (ritorna
+    nil), usa application/json;
+    > In Lua A or B restituisce B quando A è nil/false.
+  - `local content_encoding = txn.sf:req_hdr("content-encoding")` - Legge il Content-Encoding: l'Elastic Agent invia le bulk compresse in gzip. Se copio il body gzip ma non dico al cluster 2
+    che è gzip, lui prova a leggerlo come testo e va in errore (Illegal character CTRL-CHAR). Quindi va catturato e ripassato;
+- `core.register_task(function()` - Avvio un **task asincrono**, il codice girerà a parte senza bloccare la risposta all'agent.
+  - `local res, err... if method...` - Se la richiesta è una GET, fa una GET verso il cluster 2(192.168.56.1:9201) sullo stesso path.Aggiunge l'header Authorization con le credenziali in
+    Basic Auth (perché il cluster 2 richiede autenticazione e la copia deve autenticarsi da sola).
+  - `else local req_headers = {...} if content_encoding then ... end` - Altrimenti(POST,PUT..), prepara gli header: autorizzazione + content-type. E solo se c'era il Content-Encoding (gzip)
+    lo aggiunge. Questo if evita di mettere un header vuoto quando il body non è compresso.
+  - `res, err = http.post {...} end` - Fa la POST verso il cluster 2, mandando il body (data = body) e gli header appena costruiti. È qui che la copia dei dati viene effettivamente spedita.
+  - `if res then.. end end` - Logga l'esito: se c'è una risposta stampa lo status code (200 = ok), altrimenti stampa l'errore.
+    > tostring() converte il numero in stringa per concatenarlo.
+  - `<BASE64_elastic:password>` si genera con `printf "elastic:password" | base64` come ho fatto con Nginx. Il valore da mettere negli header e dato che contiene una credenziale va escluso da
+    Git (ho versionato un `mirror.lua.example`).
+    
 ## Passo 4 — La libreria HTTP
 
 HAProxy 2.4 **non ha** `core.httpclient` (introdotto dalla 2.5), e `require('http')` di
