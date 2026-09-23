@@ -330,7 +330,33 @@ function http.post(t) return do_request("POST", t.url, t.data, t.headers) end
 
 return http
 ```
-
+### Punti chiave:
+- Creo una tabella vuota che sarà il modulo che alla fine verrà restituito al `mirror.lua`;
+  > In Lua i moduli sono tabelle con dentro delle funzioni.
+- Creo la prima `funzione local function parse_url(url)` che va a spezzare un URL nei suoi pezzi, con `url:match(...)` che usa le regex di Lua:
+  - `^http://`: deve iniziare così;
+  - `([^:/]+)`: cattura l'host (tutto ciò che non sia `:` o `/`);
+  - `:?(%d*)`: un `:` opzionale seguito da cifre (porta);
+  - `(/?.*)$`: il resto (il path);
+  - Una serie di `if port/path` ( se manca la porta usare la 80, se manca il path usare /). `tonumber(port)` coperte la porta da stringa a numero;
+- Altra funzione `do_request` che estrae host/porta/path, poi crea un socket TCP con `core.tcp()` e imposta un timeout di 5 secondi (se il cluster 2 non risponde, non resta appeso);
+- `local ok, err = sock:connect(host, port)` Apre la connessione TCP, e se fallisce ritorna nil e un messaggio d'errore;
+- Corpo di `body e req` - Costruisce a mano la richiesta HTTP come testo riga per riga:
+  - prima riga: `POST /_bulk HTTP/1.1`;
+  - `Host:` - obbligatorio in HTTP/1.1;
+  - `Content-Length: #body` : #body è la lunghezza del body in Lua, HTTP vuole sapere quanti byte arrivano;
+  - `Connection: close`: chiude la connessione dopo la risposta (semplifica la lettura);
+- `if headers then...` Aggiunge gli header passati (**Authorization, Content-Type, Content-Encoding**):
+  - Il `for ... in pairs()` scorre la tabella;
+  - La riga `local val = type(v) == "table" and v[1] or v` gestisce il fatto che gli header arrivano come tabella `{"valore"}` se `v` è una tabella prende `v[1]`, altrimenti prende `v`
+    direttamente;
+  - Il `req = req .. "\r\n" .. body` finale aggiunge una riga vuota `(\r\n)` che in HTTP separa gli header dal body, rendendo req una richiesta HTTP completa;
+- `sock:send(req) ... sock:close()`: Manda la richiesta, legge tutta la risposta ("*a" = "all", leggi tutto fino alla chiusura), infine chiude il socket;
+- `local status = ... end`: Estrae lo **status code** dalla prima riga della risposta `(HTTP/1.1 200 ... → cattura 200)`. Il `response and ...` evita l'errore se response è `nil`. Ritorna
+  una tabella con status e contenuto, che è ciò che `mirror.lua` legge come `res.status_code`;
+- Infine definisco 2 funzioni pubbliche `http.get` e `http.post` come scorciatoie su `do_request`, e restituisco il modulo. Sono esattamente quelle che mirror.lua chiama con `http.get{...}` e
+  `http.post{...}`.
+  
 ## Passo 5 — La configurazione HAProxy
 
 `haproxy.cfg` con i due frontend. Punti chiave: `lua-load` dello script, `tune.bufsize`
