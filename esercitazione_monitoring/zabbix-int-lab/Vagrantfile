@@ -1,0 +1,32 @@
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu/jammy64"
+  config.vm.hostname = "zabbix-agent-vm"
+  config.vm.network "private_network", ip: "192.168.56.70"
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = "512"
+    vb.cpus = 1
+    vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+  end
+
+    config.vm.provision "shell", inline: <<-SHELL
+    set -e
+    echo "nameserver 8.8.8.8" > /etc/resolv.conf
+
+    BASE="https://repo.zabbix.com/zabbix/6.0/ubuntu/pool/main/z/zabbix-release/"
+    DEB=$(wget -qO- "$BASE" | grep -oE 'zabbix-release_6\\.0-[0-9]+\\+ubuntu22\\.04_all\\.deb' | sort -V | tail -1)
+    wget "$BASE$DEB"
+    dpkg -i "$DEB"
+    apt update
+    apt install -y zabbix-agent2
+
+    CONF=/etc/zabbix/zabbix_agent2.conf
+    sed -i 's/^Server=.*/Server=192.168.56.1/' $CONF
+    sed -i 's/^ServerActive=.*/ServerActive=192.168.56.1,192.168.56.1:10052/' $CONF
+    sed -i 's/^Hostname=.*/Hostname=zabbix-agent-vm/' $CONF
+
+    systemctl restart zabbix-agent2
+    systemctl enable zabbix-agent2
+    echo "== Zabbix agent2 avviato (Hostname=zabbix-agent-vm, ServerActive=192.168.56.1) =="
+  SHELL
+end

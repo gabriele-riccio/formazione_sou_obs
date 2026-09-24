@@ -116,6 +116,17 @@ services:
       - FLEET_URL=https://fleet-server:8220
       - FLEET_CA=/certs/fleet-server.crt
 
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    networks: [elastic-lab-net]
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+    depends_on:
+      - elasticsearch
 networks:
   elastic-lab-net:
     external: true

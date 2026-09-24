@@ -1,0 +1,9 @@
+# Segreti
+.env
+**/.env
+
+# Vagrant
+**/.vagrant/
+
+# Log
+*.log
